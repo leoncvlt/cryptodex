@@ -8,6 +8,7 @@ authors = ["Leonardo Cavaletti <impeto.blu@gmail.com>"]
 python = "^3.6"
 rich = "^9.10.0"
 pycoingecko = "^1.4.0"
+krakenex = "^2.1.0"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.6.0"
