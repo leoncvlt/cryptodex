@@ -118,7 +118,7 @@ def main():
 
     cg = CoinGeckoAPI()
     with console.status("[bold green]Fetching required data..."):
-        data = cg.get_coins_markets(args.purchase_currency, per_page=30, price_change_percentage="24h,30d")
+        data = cg.get_coins_markets(args.purchase_currency, per_page=20, price_change_percentage="24h,30d")
 
         k = krakenex.API()
         exchange_data = k.query_public("AssetPairs")["result"]

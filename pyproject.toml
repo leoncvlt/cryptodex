@@ -9,13 +9,14 @@ python = "^3.6"
 rich = "^9.10.0"
 pycoingecko = "^1.4.0"
 krakenex = "^2.1.0"
+toml = "^0.10.2"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.6.0"
 black = "^20.8b1"
 
 [tool.taskipy.tasks]
-start = "python cryptodex.py"
+start = "python cryptodex"
 freeze = "poetry export -f requirements.txt > requirements.txt"
 
 [build-system]
