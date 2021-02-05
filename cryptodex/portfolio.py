@@ -1,15 +1,9 @@
-import os
-import sys
 import logging
-import argparse
-import random
 import math
 import toml
 
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
-from rich.logging import RichHandler
 
 from pycoingecko import CoinGeckoAPI
 
@@ -23,16 +17,63 @@ console = Console()
 #     symbol: str
 #     allocation: float
 
+CURRENCIES = {"eur": "€", "usd": "$", "gbp": "£"}
+
 
 class Portfolio:
+    def connect(self, exchange):
+        cg = CoinGeckoAPI()
+        market_data = cg.get_coins_markets(self.model["currency"])
+        available_assets = exchange.get_available_assets(self.model["currency"])
+        for coin in market_data:
+            if len(self.data) >= self.model["assets"]:
+                break
+            symbol = exchange.translate_symbol(coin["symbol"])
+            if symbol in available_assets:
+                self.data.append(
+                    {
+                        "symbol": symbol,
+                        "name": coin["name"],
+                        "market_cap": coin["market_cap"],
+                    }
+                )
+            else:
+                log.warning(
+                    f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.model['currency']}"
+                )
+                continue
+        self.allocate_by_sqrt_market_cap()
+
+    def update(self, exchange):
+        assets_list = [coin["symbol"] for coin in self.data]
+        assets_data = exchange.get_assets_data(assets_list, self.model["currency"])
+        owned_assets = exchange.get_owned_assets()
+        for coin in self.data:
+            for asset in assets_data:
+                if asset["symbol"] == exchange.translate_symbol(coin["symbol"]):
+                    coin["price"] = float(asset["price"])
+                    coin["fee"] = float(asset["fee"])
+                    coin["minimum_order"] = asset["minimum_order"]
+            if coin["symbol"] in owned_assets.keys():
+                coin["amount"] = float(owned_assets[coin["symbol"]])
+            else:
+                coin["amount"] = 0
+        self.calculate_owned_allocation()
+
+    def invest(self, exchange, amount=0, rebalance=True):
+        assets_data = self.update()
+
     def allocate_by_sqrt_market_cap(self):
         total_market_cap = sum([coin["market_cap"] for coin in self.data])
         total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])
         for coin in self.data:
-            coin["market_cap_percent"] = 100 * coin["market_cap"] / total_market_cap
-            coin["allocation"] = (
-                100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
-            )
+            # coin["market_cap_percent"] = 100 * coin["market_cap"] / total_market_cap
+            coin["target"] = 100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
+
+    def calculate_owned_allocation(self):
+        total_value = sum([coin["price"] * coin["amount"] for coin in self.data])
+        for coin in self.data:
+            coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
 
     # def allocate_by_clamped_market_cap(self, max_value):
     #     total_market_cap = sum([coin["market_cap"] for coin in self.data])
@@ -64,9 +105,48 @@ class Portfolio:
         self.model = toml.load(model)
         self.data = []
 
-    def fetch_market_data(self, currency):
-        cg = CoinGeckoAPI()
-        return cg.get_coins_markets(currency)
+    def to_table(self):
+        table = Table()
+        table.add_column("Asset")
+        table.add_column("Value")
+        table.add_column("Allocation %")
+        table.add_column("Target %")
+        # table.add_column("Min. Order")
+        # table.add_column("Cost")
+        # table.add_column("Units")
+        # table.add_column("Fee")
+        for coin in self.data:
+            # day_change = round(coin["price_change_percentage_24h_in_currency"], 2)
+            # day_color = "red" if day_change < 0 else "green"
+            # month_change = round(coin["price_change_percentage_30d_in_currency"], 2)
+            # month_color = "red" if month_change < 0 else "green"
 
-    def add(self, asset):
-        self.data.append(asset)
+            # min_order_color = (
+            #     "red"
+            #     if float(coin["purchase_units"]) < float(coin["minimum_order"])
+            #     else "green"
+            # )
+            # min_order = (
+            #     f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
+            #     if float(coin["fee"]) > 0
+            #     else "?"
+            # )
+            name = coin["name"] + f" [bold]({coin['symbol']})"
+            amount = f"{round(coin['price'] * coin['amount'], 2)} {CURRENCIES[self.model['currency']]}"
+            allocation = f"{round(coin['allocation'], 2)}%"
+            target = f"{round(coin['target'], 2)}%"
+            table.add_row(
+                name,
+                amount,
+                allocation,
+                target
+                # str(coin["current_price"]),
+                # f"[{day_color}]{day_change}[/{day_color}]%",
+                # f"[{month_color}]{month_change}[/{month_color}]%",
+                # str(round(coin["market_cap_percent"], 2)),
+                # min_order,
+                # f"{round(coin['price'], 2)}",
+                # f"{round(coin['purchase_units'], 6)}",
+                # f"{round((coin['price'] * coin['fee'])/100, 2) if float(coin['fee']) > 0 else '?'}",
+            )
+        return table

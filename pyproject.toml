@@ -10,6 +10,7 @@ rich = "^9.10.0"
 pycoingecko = "^1.4.0"
 krakenex = "^2.1.0"
 toml = "^0.10.2"
+coinmarketcappy = "^1.2.0"
 
 [tool.poetry.dev-dependencies]
 taskipy = "^1.6.0"

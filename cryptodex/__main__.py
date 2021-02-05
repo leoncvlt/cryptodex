@@ -25,9 +25,10 @@ def main():
         description="Generate static websites from Notion.so pages"
     )
     argparser.add_argument(
-        "--portfolio",
-        type=argparse.FileType("r"),
-        help="Portfolio model"
+        "--portfolio", type=argparse.FileType("r"), help="Portfolio model"
+    )
+    argparser.add_argument(
+        "--private-key", type=argparse.FileType("r"), help="private-key"
     )
     argparser.add_argument(
         "--purchase-amount",
@@ -37,7 +38,7 @@ def main():
     )
     argparser.add_argument(
         "--purchase-currency",
-        default="usd",
+        default="eur",
         help="How many times to repeat the greeting",
     )
     argparser.add_argument(
@@ -55,8 +56,12 @@ def main():
 
     # start the application
     portfolio = Portfolio(args.portfolio)
-    exchange = ExchangeAdapter(portfolio, args.purchase_currency, args.purchase_amount)
+    exchange = ExchangeAdapter(args.private_key)
+    portfolio.connect(exchange=exchange)
+    portfolio.update(exchange=exchange)
     console.print(portfolio.data)
+    console.print(portfolio.to_table())
+
 
 if __name__ == "__main__":
     try:
