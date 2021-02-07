@@ -33,7 +33,7 @@ def main():
     argparser.add_argument(
         "--purchase-amount",
         type=int,
-        default=100,
+        default=0,
         help="How many times to repeat the greeting",
     )
     argparser.add_argument(
@@ -57,9 +57,12 @@ def main():
     # start the application
     portfolio = Portfolio(args.portfolio)
     exchange = ExchangeAdapter(args.private_key)
-    portfolio.connect(exchange=exchange)
-    portfolio.update(exchange=exchange)
-    console.print(portfolio.data)
+    with console.status("[bold green]Connecting portfolio..."):
+        portfolio.connect(exchange=exchange)
+    with console.status("[bold green]Updating portfolio..."):
+        portfolio.update(exchange=exchange)
+        portfolio.invest(exchange=exchange, deposit=args.purchase_amount)
+    # console.print(portfolio.data)
     console.print(portfolio.to_table())
 
 

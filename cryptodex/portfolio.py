@@ -60,14 +60,35 @@ class Portfolio:
                 coin["amount"] = 0
         self.calculate_owned_allocation()
 
-    def invest(self, exchange, amount=0, rebalance=True):
-        assets_data = self.update()
+    def invest(self, exchange, deposit=0, rebalance=True, prioritize_targets=False):
+        for coin in self.data:
+            coin['drift'] = coin['allocation'] - coin['target']
+        coins_above_target = [c for c in self.data if c['drift'] > 0]
+        coins_below_target = [c for c in self.data if c['drift'] < 0]
+            
+        if rebalance:
+            redistribution_funds = 0
+            for coin in coins_above_target:
+                coin_value = coin['price'] * coin['amount']
+                coin['currency_order'] = (coin['drift'] * coin_value) / 100
+                redistribution_funds += coin['currency_order']
+
+            redistribution_total_allocation = sum(coin['target'] for coin in coins_below_target)
+            for coin in coins_below_target:
+                coin['currency_order'] = -(coin['target'] * redistribution_funds) / redistribution_total_allocation
+
+        # if prioritize_targets:
+        #     for coin in coins_below_target:
+        #         rebalanced_amount = coin['value'] + coin['currency_order']
+        #         rebalance_leftover = 
+        
+        for coin in self.data:
+            coin['currency_order'] +=  -(coin['target'] * deposit) / 100
+            coin['units_order'] =  coin['currency_order'] / coin['price']
 
     def allocate_by_sqrt_market_cap(self):
-        total_market_cap = sum([coin["market_cap"] for coin in self.data])
         total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])
         for coin in self.data:
-            # coin["market_cap_percent"] = 100 * coin["market_cap"] / total_market_cap
             coin["target"] = 100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
 
     def calculate_owned_allocation(self):
@@ -105,12 +126,19 @@ class Portfolio:
         self.model = toml.load(model)
         self.data = []
 
+    def format_currency(self, value):
+        return f"{round(value, 2)} {CURRENCIES[self.model['currency']]}"
+
     def to_table(self):
         table = Table()
         table.add_column("Asset")
         table.add_column("Value")
         table.add_column("Allocation %")
         table.add_column("Target %")
+
+        table.add_column("Drift %")
+        table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
+        table.add_column(f"Buy / Sell (units)")
         # table.add_column("Min. Order")
         # table.add_column("Cost")
         # table.add_column("Units")
@@ -121,25 +149,30 @@ class Portfolio:
             # month_change = round(coin["price_change_percentage_30d_in_currency"], 2)
             # month_color = "red" if month_change < 0 else "green"
 
-            # min_order_color = (
-            #     "red"
-            #     if float(coin["purchase_units"]) < float(coin["minimum_order"])
-            #     else "green"
-            # )
-            # min_order = (
-            #     f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
-            #     if float(coin["fee"]) > 0
-            #     else "?"
-            # )
+            min_order_color = (
+                "red"
+                if float(abs(coin["units_order"])) < float(coin["minimum_order"])
+                else "green"
+            )
+            min_order = (
+                f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
+            )
             name = coin["name"] + f" [bold]({coin['symbol']})"
-            amount = f"{round(coin['price'] * coin['amount'], 2)} {CURRENCIES[self.model['currency']]}"
+            amount = self.format_currency((coin['price'] * coin['amount']))
             allocation = f"{round(coin['allocation'], 2)}%"
             target = f"{round(coin['target'], 2)}%"
+            drift = f"{round(coin['drift'], 2)}%"
+            buy_sell = self.format_currency(coin.get('currency_order'))
+            buy_sell_units = str(round(coin.get('units_order'), 4))
             table.add_row(
                 name,
                 amount,
                 allocation,
-                target
+                target,
+                drift,
+                buy_sell,
+                # buy_sell_units,
+                # min_order
                 # str(coin["current_price"]),
                 # f"[{day_color}]{day_change}[/{day_color}]%",
                 # f"[{month_color}]{month_change}[/{month_color}]%",

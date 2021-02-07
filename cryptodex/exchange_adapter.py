@@ -18,6 +18,11 @@ SYMBOLS = {
 
 
 class ExchangeAdapter:
+    def __init__(self, key):
+        self.api = krakenex.API()
+        self.api.load_key(key.name)
+        return
+
     def translate_symbol(self, symbol):
         return SYMBOLS.get(symbol, symbol)
 
@@ -63,23 +68,3 @@ class ExchangeAdapter:
             pair_name = asset["pair_name"]
             asset["price"] = tickers[pair_name]["c"][0]
         return assets_data
-
-    def get_tickers_data(self, assets):
-        tickers_pair = ",".join([coin["pair_name"] for coin in portfolio.data])
-        tickers = k.query_public("Ticker", data={"pair": tickers_pair})["result"]
-        for coin in portfolio.data:
-            coin["price"] = tickers[coin["pair_name"]]["c"][0]
-            coin["purchase_price"] = amount * (coin["allocation"] / 100)
-            coin["purchase_units"] = coin["purchase_price"] / float(coin["price"])
-
-    def __init__(self, key):
-        self.api = krakenex.API()
-        self.api.load_key(key.name)
-        return
-
-        tickers_pair = ",".join([coin["pair_name"] for coin in portfolio.data])
-        tickers = k.query_public("Ticker", data={"pair": tickers_pair})["result"]
-        for coin in portfolio.data:
-            coin["price"] = tickers[coin["pair_name"]]["c"][0]
-            coin["purchase_price"] = amount * (coin["allocation"] / 100)
-            coin["purchase_units"] = coin["purchase_price"] / float(coin["price"])
