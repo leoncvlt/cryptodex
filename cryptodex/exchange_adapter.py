@@ -16,14 +16,14 @@ SYMBOLS = {
     "xlm": "xxlm",
 }
 
-
+# https://www.kraken.com/en-gb/features/api#add-standard-order
 class ExchangeAdapter:
     def __init__(self, key):
         self.api = krakenex.API()
         self.api.load_key(key.name)
         return
 
-    def translate_symbol(self, symbol):
+    def get_symbol(self, symbol):
         return SYMBOLS.get(symbol, symbol)
 
     def get_available_assets(self, currency):
@@ -68,3 +68,9 @@ class ExchangeAdapter:
             pair_name = asset["pair_name"]
             asset["price"] = tickers[pair_name]["c"][0]
         return assets_data
+
+    def process_order(self, buy_or_sell, symbol, currency, units, mock=True):
+        log.info(
+            f"Processing {buy_or_sell.upper()} order for {round(units, 5)} units of {symbol}"
+        )
+        return True

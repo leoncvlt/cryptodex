@@ -1,6 +1,7 @@
 import logging
 import math
 import toml
+from copy import deepcopy
 
 from rich.console import Console
 from rich.table import Table
@@ -28,7 +29,7 @@ class Portfolio:
         for coin in market_data:
             if len(self.data) >= self.model["assets"]:
                 break
-            symbol = exchange.translate_symbol(coin["symbol"])
+            symbol = exchange.get_symbol(coin["symbol"])
             if symbol in available_assets:
                 self.data.append(
                     {
@@ -50,7 +51,7 @@ class Portfolio:
         owned_assets = exchange.get_owned_assets()
         for coin in self.data:
             for asset in assets_data:
-                if asset["symbol"] == exchange.translate_symbol(coin["symbol"]):
+                if asset["symbol"] == exchange.get_symbol(coin["symbol"]):
                     coin["price"] = float(asset["price"])
                     coin["fee"] = float(asset["fee"])
                     coin["minimum_order"] = asset["minimum_order"]
@@ -59,32 +60,66 @@ class Portfolio:
             else:
                 coin["amount"] = 0
         self.calculate_owned_allocation()
+        self.calculate_drift()
 
     def invest(self, exchange, deposit=0, rebalance=True, prioritize_targets=False):
-        for coin in self.data:
-            coin['drift'] = coin['allocation'] - coin['target']
-        coins_above_target = [c for c in self.data if c['drift'] > 0]
-        coins_below_target = [c for c in self.data if c['drift'] < 0]
-            
+        orders = []
+        portfolio = deepcopy(self.data)
+        coins_above_target = [c for c in portfolio if c["drift"] > 0]
+        coins_below_target = [c for c in portfolio if c["drift"] < 0]
+
         if rebalance:
             redistribution_funds = 0
             for coin in coins_above_target:
-                coin_value = coin['price'] * coin['amount']
-                coin['currency_order'] = (coin['drift'] * coin_value) / 100
-                redistribution_funds += coin['currency_order']
+                coin_value = coin["price"] * coin["amount"]
+                coin["currency_order"] = (coin["drift"] * coin_value) / 100
+                redistribution_funds += coin["currency_order"]
 
-            redistribution_total_allocation = sum(coin['target'] for coin in coins_below_target)
+            redistribution_total_allocation = sum(
+                coin["target"] for coin in coins_below_target
+            )
             for coin in coins_below_target:
-                coin['currency_order'] = -(coin['target'] * redistribution_funds) / redistribution_total_allocation
+                coin["currency_order"] = (
+                    -(coin["target"] * redistribution_funds)
+                    / redistribution_total_allocation
+                )
 
         # if prioritize_targets:
         #     for coin in coins_below_target:
         #         rebalanced_amount = coin['value'] + coin['currency_order']
-        #         rebalance_leftover = 
-        
-        for coin in self.data:
-            coin['currency_order'] +=  -(coin['target'] * deposit) / 100
-            coin['units_order'] =  coin['currency_order'] / coin['price']
+        #         rebalance_leftover =
+
+        for coin in portfolio:
+            coin["currency_order"] += -(coin["target"] * deposit) / 100
+            coin["units_order"] = coin["currency_order"] / coin["price"]
+            orders.append(
+                {
+                    "symbol": coin["symbol"],
+                    "units": abs(coin["units_order"]),
+                    "buy_or_sell": "buy" if coin["units_order"] < 0 else "sell",
+                    "currency": self.model["currency"],
+                    "minimum_order": coin["minimum_order"],
+                }
+            )
+
+        return orders
+
+    def get_invalid_orders(self, orders):
+        return [
+            order
+            for order in orders
+            if float(abs(order["units"])) < float(order["minimum_order"])
+        ]
+
+    def process_orders(self, exchange, orders, mock=True):
+        for order in [order for order in orders if order["units"]]:
+            order_result = exchange.process_order(
+                order["buy_or_sell"],
+                order["symbol"],
+                order["currency"],
+                order["units"],
+                mock=mock,
+            )
 
     def allocate_by_sqrt_market_cap(self):
         total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])
@@ -96,31 +131,9 @@ class Portfolio:
         for coin in self.data:
             coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
 
-    # def allocate_by_clamped_market_cap(self, max_value):
-    #     total_market_cap = sum([coin["market_cap"] for coin in self.data])
-    #     for coin in self.data:
-    #         coin["market_cap_percent"] = 100 * coin["market_cap"] / total_market_cap
-    #         coin["allocation"] = coin["market_cap_percent"]
-    #     overflow = 0
-    #     for i in range(0, len(self.data)):
-    #         current_coin = self.data[i]
-    #         if current_coin["allocation"] > max_value:
-    #             overflow = current_coin["allocation"] - max_value
-    #             self.data[i]["allocation"] = max_value
-    #             redist_values = [
-    #                 other_coin["allocation"]
-    #                 for other_coin in self.data
-    #                 if other_coin["allocation"] < max_value
-    #             ]
-    #             for j in range(0, len(self.data)):
-    #                 other_coin = self.data[j]
-    #                 if other_coin["allocation"] < max_value:
-    #                     weighted_overflow = (
-    #                         overflow * other_coin["allocation"] / sum(redist_values)
-    #                     )
-    #                     self.data[j]["allocation"] = (
-    #                         other_coin["allocation"] + weighted_overflow
-    #                     )
+    def calculate_drift(self):
+        for coin in self.data:
+            coin["drift"] = coin["allocation"] - coin["target"]
 
     def __init__(self, model):
         self.model = toml.load(model)
@@ -135,10 +148,9 @@ class Portfolio:
         table.add_column("Value")
         table.add_column("Allocation %")
         table.add_column("Target %")
-
         table.add_column("Drift %")
-        table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
-        table.add_column(f"Buy / Sell (units)")
+        # table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
+        # table.add_column(f"Buy / Sell (units)")
         # table.add_column("Min. Order")
         # table.add_column("Cost")
         # table.add_column("Units")
@@ -149,28 +161,26 @@ class Portfolio:
             # month_change = round(coin["price_change_percentage_30d_in_currency"], 2)
             # month_color = "red" if month_change < 0 else "green"
 
-            min_order_color = (
-                "red"
-                if float(abs(coin["units_order"])) < float(coin["minimum_order"])
-                else "green"
-            )
-            min_order = (
-                f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
-            )
-            name = coin["name"] + f" [bold]({coin['symbol']})"
-            amount = self.format_currency((coin['price'] * coin['amount']))
+            # min_order_color = (
+            #     "red"
+            #     if float(abs(coin["units_order"])) < float(coin["minimum_order"])
+            #     else "green"
+            # )
+            # min_order = f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
+            name = f"[bold]{coin['symbol'].upper()}[/bold] ({coin['name']})"
+            amount = self.format_currency((coin["price"] * coin["amount"]))
             allocation = f"{round(coin['allocation'], 2)}%"
             target = f"{round(coin['target'], 2)}%"
             drift = f"{round(coin['drift'], 2)}%"
-            buy_sell = self.format_currency(coin.get('currency_order'))
-            buy_sell_units = str(round(coin.get('units_order'), 4))
+            # buy_sell = self.format_currency(coin.get("currency_order"))
+            # buy_sell_units = str(round(coin.get("units_order"), 4))
             table.add_row(
                 name,
                 amount,
                 allocation,
                 target,
                 drift,
-                buy_sell,
+                # buy_sell,
                 # buy_sell_units,
                 # min_order
                 # str(coin["current_price"]),
@@ -181,5 +191,32 @@ class Portfolio:
                 # f"{round(coin['price'], 2)}",
                 # f"{round(coin['purchase_units'], 6)}",
                 # f"{round((coin['price'] * coin['fee'])/100, 2) if float(coin['fee']) > 0 else '?'}",
+            )
+        return table
+
+    def format_orders(self, orders):
+        table = Table()
+        table.add_column("Asset")
+        table.add_column("Order Type")
+        # table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
+        table.add_column(f"Units")
+        table.add_column("Min. Order")
+        # table.add_column("Fee")
+        for order in orders:
+            name = f"[bold]{order['symbol'].upper()}"
+            buy_or_sell = order["buy_or_sell"].upper()
+            buy_sell_units = str(round(order.get("units"), 5))
+            min_order_color = (
+                "red"
+                if float(abs(order["units"])) < float(order["minimum_order"])
+                else "green"
+            )
+            min_order = f"[{min_order_color}]{order['minimum_order']}[/{min_order_color}]"
+            table.add_row(
+                name,
+                buy_or_sell,
+                # buy_sell,
+                buy_sell_units,
+                min_order,
             )
         return table

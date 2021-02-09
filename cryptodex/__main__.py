@@ -20,6 +20,7 @@ log = logging.getLogger(__name__)
 install_rich_tracebacks()
 console = Console()
 
+
 def main():
     argparser = argparse.ArgumentParser(
         description="Generate static websites from Notion.so pages"
@@ -31,7 +32,7 @@ def main():
         "--private-key", type=argparse.FileType("r"), help="private-key"
     )
     argparser.add_argument(
-        "--purchase-amount",
+        "--invest",
         type=int,
         default=0,
         help="How many times to repeat the greeting",
@@ -57,13 +58,17 @@ def main():
     # start the application
     portfolio = Portfolio(args.portfolio)
     exchange = ExchangeAdapter(args.private_key)
-    with console.status("[bold green]Connecting portfolio..."):
-        portfolio.connect(exchange=exchange)
-    with console.status("[bold green]Updating portfolio..."):
-        portfolio.update(exchange=exchange)
-        portfolio.invest(exchange=exchange, deposit=args.purchase_amount)
-    # console.print(portfolio.data)
+    portfolio.connect(exchange)
+    portfolio.update(exchange)
+    orders = portfolio.invest(exchange, deposit=args.invest)
+    invalid_orders = portfolio.get_invalid_orders(orders)
     console.print(portfolio.to_table())
+    console.print(portfolio.format_orders(orders))
+    if invalid_orders:
+        log.warning(
+            f"{len(invalid_orders)} orders do not meet the minimum order criteria"
+        )
+    portfolio.process_orders(exchange, orders)
 
 
 if __name__ == "__main__":
