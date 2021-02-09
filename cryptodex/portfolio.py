@@ -62,36 +62,57 @@ class Portfolio:
         self.calculate_owned_allocation()
         self.calculate_drift()
 
-    def invest(self, exchange, deposit=0, rebalance=True, prioritize_targets=False):
+    def invest(self, amount=0, rebalance=True, prioritize_targets=False):
         orders = []
         portfolio = deepcopy(self.data)
         coins_above_target = [c for c in portfolio if c["drift"] > 0]
         coins_below_target = [c for c in portfolio if c["drift"] < 0]
 
+        # get the total value of the current portfolio
+        total_value = sum([coin["price"] * coin["amount"] for coin in portfolio])
         if rebalance:
-            redistribution_funds = 0
             for coin in coins_above_target:
+                # for each coin whose allocation is drifting above the target,
+                # sell the amount required to put it back into target
+                # and add the revenue of the sell order to the availabel fund
                 coin_value = coin["price"] * coin["amount"]
                 coin["currency_order"] = (coin["drift"] * coin_value) / 100
-                redistribution_funds += coin["currency_order"]
+                amount += coin["currency_order"]
 
-            redistribution_total_allocation = sum(
-                coin["target"] for coin in coins_below_target
-            )
+            # redistribution_total_allocation = sum(
+            #     coin["target"] for coin in coins_below_target
+            # )
+            # for coin in coins_below_target:
+            #     coin["currency_order"] = (
+            #         -(coin["target"] * redistribution_funds)
+            #         / redistribution_total_allocation
+            #     )
+
             for coin in coins_below_target:
-                coin["currency_order"] = (
-                    -(coin["target"] * redistribution_funds)
-                    / redistribution_total_allocation
-                )
-
-        # if prioritize_targets:
-        #     for coin in coins_below_target:
-        #         rebalanced_amount = coin['value'] + coin['currency_order']
-        #         rebalance_leftover =
+                # for each coin whose allocation is drifting below the target,
+                # calculate the amount of funds needed to put it back into target
+                # if enough funds to do so are available, set the buy order,
+                # update the available fund and do the same for the next coin
+                funds_needed_redist = abs(total_value * coin["drift"]) / 100
+                if (amount - funds_needed_redist > 0):
+                    # we use abs() above, and set a negative value here as
+                    # buy orders are represented by a negative number
+                    coin["currency_order"] = -funds_needed_redist;
+                    amount -= funds_needed_redist;
+                else:
+                    log.warning("Not enough funds to rebalance all assets.")
+                    break
 
         for coin in portfolio:
-            coin["currency_order"] += -(coin["target"] * deposit) / 100
+            # spread the available funds into buy orders for all assets,
+            # proportionally to their target weighting
+            coin["currency_order"] = (
+                coin.get("currency_order", 0) - (coin["target"] * amount) / 100
+            )
             coin["units_order"] = coin["currency_order"] / coin["price"]
+
+            # create an order object to summarize the transaction for the asset,
+            # and add it to the pending orders list
             orders.append(
                 {
                     "symbol": coin["symbol"],
@@ -102,7 +123,22 @@ class Portfolio:
                 }
             )
 
+        # return the portfolios pending order to execute this investment strategy
         return orders
+
+    def get_predicted_portfolio(self, orders):
+        portfolio = deepcopy(self.data)
+        for order in orders:
+            for coin in portfolio:
+                if coin['symbol'] == order['symbol']:
+                    sign = 1 if order["buy_or_sell"] == "buy" else -1
+                    coin['amount'] += order['units'] * sign
+        total_value = sum([coin["price"] * coin["amount"] for coin in portfolio])
+        for coin in portfolio:
+            coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
+            coin["drift"] = coin["allocation"] - coin["target"]
+        return portfolio
+
 
     def get_invalid_orders(self, orders):
         return [
@@ -142,7 +178,7 @@ class Portfolio:
     def format_currency(self, value):
         return f"{round(value, 2)} {CURRENCIES[self.model['currency']]}"
 
-    def to_table(self):
+    def format_portfolio(self, portfolio):
         table = Table()
         table.add_column("Asset")
         table.add_column("Value")
@@ -155,7 +191,7 @@ class Portfolio:
         # table.add_column("Cost")
         # table.add_column("Units")
         # table.add_column("Fee")
-        for coin in self.data:
+        for coin in portfolio:
             # day_change = round(coin["price_change_percentage_24h_in_currency"], 2)
             # day_color = "red" if day_change < 0 else "green"
             # month_change = round(coin["price_change_percentage_30d_in_currency"], 2)

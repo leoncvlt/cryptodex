@@ -60,15 +60,17 @@ def main():
     exchange = ExchangeAdapter(args.private_key)
     portfolio.connect(exchange)
     portfolio.update(exchange)
-    orders = portfolio.invest(exchange, deposit=args.invest)
+    orders = portfolio.invest(amount=args.invest)
     invalid_orders = portfolio.get_invalid_orders(orders)
-    console.print(portfolio.to_table())
+    console.print(portfolio.format_portfolio(portfolio.data))
     console.print(portfolio.format_orders(orders))
     if invalid_orders:
         log.warning(
             f"{len(invalid_orders)} orders do not meet the minimum order criteria"
         )
-    portfolio.process_orders(exchange, orders)
+    predicted_portfolio = portfolio.get_predicted_portfolio(orders)
+    console.print(portfolio.format_portfolio(predicted_portfolio))
+    # portfolio.process_orders(exchange, orders)
 
 
 if __name__ == "__main__":
