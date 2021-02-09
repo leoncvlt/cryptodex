@@ -18,8 +18,6 @@ console = Console()
 #     symbol: str
 #     allocation: float
 
-CURRENCIES = {"eur": "€", "usd": "$", "gbp": "£"}
-
 
 class Portfolio:
     def connect(self, exchange):
@@ -174,85 +172,3 @@ class Portfolio:
     def __init__(self, model):
         self.model = toml.load(model)
         self.data = []
-
-    def format_currency(self, value):
-        return f"{round(value, 2)} {CURRENCIES[self.model['currency']]}"
-
-    def format_portfolio(self, portfolio):
-        table = Table()
-        table.add_column("Asset")
-        table.add_column("Value")
-        table.add_column("Allocation %")
-        table.add_column("Target %")
-        table.add_column("Drift %")
-        # table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
-        # table.add_column(f"Buy / Sell (units)")
-        # table.add_column("Min. Order")
-        # table.add_column("Cost")
-        # table.add_column("Units")
-        # table.add_column("Fee")
-        for coin in portfolio:
-            # day_change = round(coin["price_change_percentage_24h_in_currency"], 2)
-            # day_color = "red" if day_change < 0 else "green"
-            # month_change = round(coin["price_change_percentage_30d_in_currency"], 2)
-            # month_color = "red" if month_change < 0 else "green"
-
-            # min_order_color = (
-            #     "red"
-            #     if float(abs(coin["units_order"])) < float(coin["minimum_order"])
-            #     else "green"
-            # )
-            # min_order = f"[{min_order_color}]{coin['minimum_order']}[/{min_order_color}]"
-            name = f"[bold]{coin['symbol'].upper()}[/bold] ({coin['name']})"
-            amount = self.format_currency((coin["price"] * coin["amount"]))
-            allocation = f"{round(coin['allocation'], 2)}%"
-            target = f"{round(coin['target'], 2)}%"
-            drift = f"{round(coin['drift'], 2)}%"
-            # buy_sell = self.format_currency(coin.get("currency_order"))
-            # buy_sell_units = str(round(coin.get("units_order"), 4))
-            table.add_row(
-                name,
-                amount,
-                allocation,
-                target,
-                drift,
-                # buy_sell,
-                # buy_sell_units,
-                # min_order
-                # str(coin["current_price"]),
-                # f"[{day_color}]{day_change}[/{day_color}]%",
-                # f"[{month_color}]{month_change}[/{month_color}]%",
-                # str(round(coin["market_cap_percent"], 2)),
-                # min_order,
-                # f"{round(coin['price'], 2)}",
-                # f"{round(coin['purchase_units'], 6)}",
-                # f"{round((coin['price'] * coin['fee'])/100, 2) if float(coin['fee']) > 0 else '?'}",
-            )
-        return table
-
-    def format_orders(self, orders):
-        table = Table()
-        table.add_column("Asset")
-        table.add_column("Order Type")
-        # table.add_column(f"Buy / Sell ({CURRENCIES[self.model['currency']]})")
-        table.add_column(f"Units")
-        table.add_column("Min. Order")
-        # table.add_column("Fee")
-        for order in orders:
-            name = f"[bold]{order['symbol'].upper()}"
-            buy_or_sell = order["buy_or_sell"].upper()
-            buy_sell_units = str(round(order.get("units"), 5))
-            min_order_color = (
-                "red"
-                if float(abs(order["units"])) < float(order["minimum_order"])
-                else "green"
-            )
-            min_order = f"[{min_order_color}]{order['minimum_order']}[/{min_order_color}]"
-            table.add_row(
-                name,
-                buy_or_sell,
-                # buy_sell,
-                buy_sell_units,
-                min_order,
-            )
-        return table

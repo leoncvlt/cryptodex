@@ -16,6 +16,8 @@ from rich.traceback import install as install_rich_tracebacks
 from portfolio import Portfolio
 from exchange_adapter import ExchangeAdapter
 
+from drawing import display_portfolio_assets, display_orders
+
 log = logging.getLogger(__name__)
 install_rich_tracebacks()
 console = Console()
@@ -61,15 +63,17 @@ def main():
     portfolio.connect(exchange)
     portfolio.update(exchange)
     orders = portfolio.invest(amount=args.invest)
+    
+    display_portfolio_assets(portfolio.data)
+    display_orders(orders)
+    display_portfolio_assets(portfolio.get_predicted_portfolio(orders))
+
     invalid_orders = portfolio.get_invalid_orders(orders)
-    console.print(portfolio.format_portfolio(portfolio.data))
-    console.print(portfolio.format_orders(orders))
     if invalid_orders:
         log.warning(
             f"{len(invalid_orders)} orders do not meet the minimum order criteria"
         )
-    predicted_portfolio = portfolio.get_predicted_portfolio(orders)
-    console.print(portfolio.format_portfolio(predicted_portfolio))
+    
     # portfolio.process_orders(exchange, orders)
 
 
