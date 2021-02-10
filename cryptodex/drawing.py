@@ -2,6 +2,9 @@ import logging
 
 from rich.console import Console
 from rich.table import Table
+from rich.panel import Panel
+from rich import box
+from rich.style import Style
 
 log = logging.getLogger(__name__)
 console = Console()

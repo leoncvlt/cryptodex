@@ -4,7 +4,7 @@ import toml
 from copy import deepcopy
 
 from rich.console import Console
-from rich.table import Table
+
 
 from pycoingecko import CoinGeckoAPI
 
@@ -37,9 +37,9 @@ class Portfolio:
                     }
                 )
             else:
-                log.warning(
-                    f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.model['currency']}"
-                )
+                # console.warning(
+                #     f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.model['currency']}"
+                # )
                 continue
         self.allocate_by_sqrt_market_cap()
 

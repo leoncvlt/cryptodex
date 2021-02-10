@@ -87,7 +87,7 @@ class ExchangeAdapter:
                 "type": buy_or_sell,
                 "ordertype": "market",
                 "volume": units,
-                "validate": True,
+                "validate": mock,
             },
         )
         if order_result["error"]:
