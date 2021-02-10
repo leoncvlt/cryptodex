@@ -75,11 +75,10 @@ def main():
     log.propagate = False
 
     # start the application
-    portfolio = Portfolio(args.portfolio)
+    portfolio = Portfolio(args.portfolio, args.currency)
     exchange = ExchangeAdapter(args.private_key)
     with console.status("[bold green]Connecting to exchange..."):
         portfolio.connect(exchange)
-        portfolio.update(exchange)
 
     console.print("[bold] Your current portfolio:")
     display_portfolio_assets(portfolio.data, args.currency)

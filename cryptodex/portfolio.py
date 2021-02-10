@@ -22,42 +22,103 @@ console = Console()
 class Portfolio:
     def connect(self, exchange):
         cg = CoinGeckoAPI()
-        market_data = cg.get_coins_markets(self.model["currency"])
-        available_assets = exchange.get_available_assets(self.model["currency"])
+        market_data = cg.get_coins_markets(self.currency)
+        owned_assets = exchange.get_owned_assets()
+        available_assets = exchange.get_available_assets(self.currency)
+        excluded_assets = [asset.lower() for asset in self.model["exclude"]]
+
+        # create a copy of the owned assets dict for us to modify later
+        # in order to keep track of owned assets we add to the portfolio
+        parsed_owned_assets = deepcopy(owned_assets)
+
+        # iterate throught the data of every asset in the market as provided by the
+        # coingecko api, starting from the ones with the highest market cap
         for coin in market_data:
-            if len(self.data) >= self.model["assets"]:
+            # if we reached the max amount of holdings to have in the portfolio
+            # and there are no more owned assets to parse, stop iterating
+            is_over_max_holdings = (
+                len(self.data) >= self.model["assets"] + self.model["max_stale"]
+            )
+            if is_over_max_holdings and not len(parsed_owned_assets):
                 break
+
+            # get the symbol of the asset as specified in the exchange
             symbol = exchange.get_symbol(coin["symbol"])
-            if symbol in available_assets:
-                self.data.append(
-                    {
-                        "symbol": symbol,
-                        "name": coin["name"],
-                        "market_cap": coin["market_cap"],
-                    }
-                )
-            else:
-                # console.warning(
-                #     f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.model['currency']}"
-                # )
+
+            # if the assets is in the exclusion list
+            # (using the coingecko naming convention),
+            # just skip over it, but remove it from the list of owned assets if present
+            if coin["symbol"].lower() in excluded_assets:
+                # log.info(f"{coin['symbol']} in exclusion list, skipped")
+                if symbol in parsed_owned_assets.keys():
+                    del parsed_owned_assets[symbol]
                 continue
+
+            # if the asset is available on this exchange for trading
+            # with the provided currency
+            if symbol in available_assets:
+                data = {
+                    "symbol": symbol,
+                    "name": coin["name"],
+                    "market_cap": coin["market_cap"],
+                }
+                # if we reached the max amount of holdings to have in the portfolio,
+                # mark this asset as stale (won't be bought or sold)
+                if len(self.data) >= self.model["assets"]:
+                    data["stale"] = True
+
+                # if we don't own the asset, add it to the portfolio only if we are
+                # under the max amount of holdings to have, and set its amount to zero
+                if not symbol in parsed_owned_assets.keys():
+                    data["amount"] = 0
+                    if not is_over_max_holdings:
+                        self.data.append(data)
+                # otherwise, we own the asset already, parse the number of units we own
+                # remove it to the list of owned assets to parse
+                # and add it to the portfolio regardless of the max amount of holdings
+                # (owned assets that are added after that amount is reached will
+                # be marked as stale anyway and won't be bought or sold)
+                else:
+                    data["amount"] = float(parsed_owned_assets[symbol])
+                    del parsed_owned_assets[symbol]
+                    self.data.append(data)
+            # else:
+            #     log.warning(
+            #         f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.currency}"
+            #     )
+
+        # calculate the target allocation of each asset in the portfolio
+        # based on the square root of its market cap
         self.allocate_by_sqrt_market_cap()
 
-    def update(self, exchange):
-        assets_list = [coin["symbol"] for coin in self.data]
-        assets_data = exchange.get_assets_data(assets_list, self.model["currency"])
-        owned_assets = exchange.get_owned_assets()
-        for coin in self.data:
-            for asset in assets_data:
-                if asset["symbol"] == exchange.get_symbol(coin["symbol"]):
-                    coin["price"] = float(asset["price"])
-                    coin["fee"] = float(asset["fee"])
-                    coin["minimum_order"] = asset["minimum_order"]
-                    coin["exchange_data"] = asset["exchange_data"]
-            if coin["symbol"] in owned_assets.keys():
-                coin["amount"] = float(owned_assets[coin["symbol"]])
+        # create a list of all the symbols of the assets we hold in the portfolio,
+        # and pass that to the get_assets_data() method on the exchange to get
+        # the exchange data for each asset
+        assets_list = [asset["symbol"] for asset in self.data]
+        assets_data = exchange.get_assets_data(assets_list, self.currency)
+
+        # go through each asset in our portfolio and, finding its corresponding asset
+        # in the exchange's data list, fill up its price / fee / minimum order fields
+        for asset in self.data:
+            exchange_symbol = exchange.get_symbol(asset["symbol"])
+            exchange_asset = next(
+                (a for a in assets_data if a["symbol"] == exchange_symbol), None
+            )
+            if exchange_asset:
+                asset["price"] = float(exchange_asset["price"])
+                asset["fee"] = float(exchange_asset["fee"])
+                asset["minimum_order"] = exchange_asset["minimum_order"]
+                asset["exchange_data"] = exchange_asset["exchange_data"]
             else:
-                coin["amount"] = 0
+                console.warning(
+                    f"Unable to fetch data for asset {exchange_symbol} "
+                    "Even though it was originally marked as available in the exchange... "
+                    "Something went really wrong!"
+                )
+
+        # given that we have the values of each asset in the portfolio,
+        # calculate the current allocation of all assets and how much
+        # they are drifting from their target allocation
         self.calculate_owned_allocation()
         self.calculate_drift()
 
@@ -103,6 +164,8 @@ class Portfolio:
                     break
 
         for coin in portfolio:
+            if coin.get("stale", False):
+                continue
             # spread the available funds into buy orders for all assets,
             # proportionally to their target weighting
             coin["currency_order"] = (
@@ -117,7 +180,7 @@ class Portfolio:
                     "symbol": coin["symbol"],
                     "units": abs(coin["units_order"]),
                     "buy_or_sell": "buy" if coin["units_order"] < 0 else "sell",
-                    "currency": self.model["currency"],
+                    "currency": self.currency,
                     "minimum_order": coin["minimum_order"],
                     "exchange_data": coin.get("exchange_data", {}),
                 }
@@ -137,6 +200,7 @@ class Portfolio:
         for coin in portfolio:
             coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
             coin["drift"] = coin["allocation"] - coin["target"]
+
         return portfolio
 
     def get_invalid_orders(self, orders):
@@ -162,19 +226,30 @@ class Portfolio:
                 log.warning("There was a problem with the order: " + str(info))
 
     def allocate_by_sqrt_market_cap(self):
+        #TODO: Exclude stale assets
         total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])
         for coin in self.data:
-            coin["target"] = 100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
+            if not coin.get("stale", False):
+                coin["target"] = (
+                    100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
+                )
+            else:
+                coin["target"] = 0
 
     def calculate_owned_allocation(self):
+        #TODO: Exclude stale assets
         total_value = sum([coin["price"] * coin["amount"] for coin in self.data])
         for coin in self.data:
-            coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
+            if total_value:
+                coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
+            else:
+                coin["allocation"] = 0
 
     def calculate_drift(self):
         for coin in self.data:
             coin["drift"] = coin["allocation"] - coin["target"]
 
-    def __init__(self, model):
+    def __init__(self, model, currency):
         self.model = toml.load(model)
+        self.currency = currency
         self.data = []

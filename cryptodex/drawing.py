@@ -23,7 +23,10 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Allocation %")
     table.add_column("Target %")
     table.add_column("Drift %")
-    for coin in assets:
+    coins_to_display = [
+        asset for asset in assets if not asset.get("stale", False) or asset["amount"] > 0
+    ]
+    for coin in coins_to_display:
         name = f"[bold]{coin['symbol'].upper()}[/bold] ({coin['name']})"
         amount = format_currency((coin["price"] * coin["amount"]), currency)
         allocation = f"{round(coin['allocation'], 2)}%"

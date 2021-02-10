@@ -1,3 +1,3 @@
-assets = 10
-currency = "eur"
-market_weight_bias = 0.5
+assets = 12
+exclude = []
+max_stale = 0
