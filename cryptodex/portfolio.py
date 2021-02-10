@@ -53,6 +53,7 @@ class Portfolio:
                     coin["price"] = float(asset["price"])
                     coin["fee"] = float(asset["fee"])
                     coin["minimum_order"] = asset["minimum_order"]
+                    coin["exchange_data"] = asset["exchange_data"]
             if coin["symbol"] in owned_assets.keys():
                 coin["amount"] = float(owned_assets[coin["symbol"]])
             else:
@@ -92,11 +93,11 @@ class Portfolio:
                 # if enough funds to do so are available, set the buy order,
                 # update the available fund and do the same for the next coin
                 funds_needed_redist = abs(total_value * coin["drift"]) / 100
-                if (amount - funds_needed_redist > 0):
+                if amount - funds_needed_redist > 0:
                     # we use abs() above, and set a negative value here as
                     # buy orders are represented by a negative number
-                    coin["currency_order"] = -funds_needed_redist;
-                    amount -= funds_needed_redist;
+                    coin["currency_order"] = -funds_needed_redist
+                    amount -= funds_needed_redist
                 else:
                     log.warning("Not enough funds to rebalance all assets.")
                     break
@@ -118,6 +119,7 @@ class Portfolio:
                     "buy_or_sell": "buy" if coin["units_order"] < 0 else "sell",
                     "currency": self.model["currency"],
                     "minimum_order": coin["minimum_order"],
+                    "exchange_data": coin.get("exchange_data", {}),
                 }
             )
 
@@ -128,15 +130,14 @@ class Portfolio:
         portfolio = deepcopy(self.data)
         for order in orders:
             for coin in portfolio:
-                if coin['symbol'] == order['symbol']:
+                if coin["symbol"] == order["symbol"]:
                     sign = 1 if order["buy_or_sell"] == "buy" else -1
-                    coin['amount'] += order['units'] * sign
+                    coin["amount"] += order["units"] * sign
         total_value = sum([coin["price"] * coin["amount"] for coin in portfolio])
         for coin in portfolio:
             coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
             coin["drift"] = coin["allocation"] - coin["target"]
         return portfolio
-
 
     def get_invalid_orders(self, orders):
         return [
@@ -147,13 +148,18 @@ class Portfolio:
 
     def process_orders(self, exchange, orders, mock=True):
         for order in [order for order in orders if order["units"]]:
-            order_result = exchange.process_order(
+            (success, info) = exchange.process_order(
                 order["buy_or_sell"],
                 order["symbol"],
                 order["currency"],
                 order["units"],
+                exchange_data=order["exchange_data"],
                 mock=mock,
             )
+            if success:
+                log.info("The order executed successfully: " + str(info))
+            else:
+                log.warning("There was a problem with the order: " + str(info))
 
     def allocate_by_sqrt_market_cap(self):
         total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])

@@ -74,7 +74,7 @@ def main():
             f"{len(invalid_orders)} orders do not meet the minimum order criteria"
         )
     
-    # portfolio.process_orders(exchange, orders)
+    portfolio.process_orders(exchange, orders)
 
 
 if __name__ == "__main__":

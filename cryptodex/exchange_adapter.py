@@ -49,11 +49,11 @@ class ExchangeAdapter:
         asset_pairs = self.api.query_public("AssetPairs")["result"]
         assets_data = [
             {
-                # **a,
                 "pair_name": assetpair,
                 "symbol": asset["base"].lower(),
                 "fee": asset["fees"][0][-1],
                 "minimum_order": float(asset.get("ordermin", -1)),
+                "exchange_data": {"asset_pair": assetpair, **asset},
             }
             for assetpair, asset in asset_pairs.items()
             if asset["base"].lower() in assets
@@ -69,8 +69,28 @@ class ExchangeAdapter:
             asset["price"] = tickers[pair_name]["c"][0]
         return assets_data
 
-    def process_order(self, buy_or_sell, symbol, currency, units, mock=True):
+    def process_order(
+        self, buy_or_sell, symbol, currency, units, exchange_data={}, mock=True
+    ):
+        if not "asset_pair" in exchange_data:
+            log.debug(
+                "asset_pair parameter not found in exchange_data, attempting to build manually"
+            )
+        pair = exchange_data.get("asset_pair", f"{symbol.upper()}{currency.upper()}")
         log.info(
-            f"Processing {buy_or_sell.upper()} order for {round(units, 5)} units of {symbol}"
+            f"Processing {buy_or_sell.upper()} order for {round(units, 5)} units of {symbol} ({pair})"
         )
-        return True
+        order_result = self.api.query_private(
+            "AddOrder",
+            {
+                "pair": pair,
+                "type": buy_or_sell,
+                "ordertype": "market",
+                "volume": units,
+                "validate": True,
+            },
+        )
+        if order_result["error"]:
+            return (False, order_result["error"])
+        else:
+            return (True, order_result["result"])
