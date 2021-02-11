@@ -82,16 +82,15 @@ class KrakenExchange(Exchange):
             f"Processing {order.buy_or_sell.upper()} order for "
             f"{round(order.units, 5)} units of {order.symbol} ({pair})"
         )
-        order_result = self.api.query_private(
-            "AddOrder",
-            {
-                "pair": pair,
-                "type": order.buy_or_sell,
-                "ordertype": "market",
-                "volume": order.units,
-                "validate": mock,
-            },
-        )
+        order_data = {
+            "pair": pair,
+            "type": order.buy_or_sell,
+            "ordertype": "market",
+            "volume": order.units,
+        }
+        if mock:
+            order_data["validate"] = True
+        order_result = self.api.query_private("AddOrder", data=order_data)
         if order_result["error"]:
             return (False, order_result["error"])
         else:
