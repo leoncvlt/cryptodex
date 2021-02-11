@@ -19,7 +19,5 @@ class Exchange(ABC):
         pass
 
     @abstractmethod
-    def process_order(
-        self, buy_or_sell, symbol, currency, units, exchange_data={}, mock=True
-    ):
+    def process_order(self, order, mock=True):
         pass

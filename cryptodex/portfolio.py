@@ -29,6 +29,23 @@ class Holding:
     exchange_data: dict = field(default_factory=dict)
 
 
+@dataclass
+class Order:
+    symbol: str
+    units: float
+    currency: str
+    buy_or_sell: str = field(init=False)
+    minimum_order: float = 0.0
+    exchange_data: dict = field(default_factory=dict)
+
+    # on order initialization, set its type (buy or sell) based on the amount of units
+    # being traded (negating units means purchase order, positive means sell order)
+    # and set its units (order volume) to an absolute value afterwards
+    def __post_init__(self):
+        self.buy_or_sell = "buy" if self.units < 0 else "sell"
+        self.units = abs(self.units)
+
+
 class Portfolio:
     def connect(self, exchange):
         cg = CoinGeckoAPI()
@@ -173,16 +190,14 @@ class Portfolio:
             # create an order object to summarize the transaction for the asset,
             # and add it to the pending orders list
             if holding.__units_order:
-                orders.append(
-                    {
-                        "symbol": holding.symbol,
-                        "units": abs(holding.__units_order),
-                        "buy_or_sell": "buy" if holding.__units_order < 0 else "sell",
-                        "currency": self.currency,
-                        "minimum_order": holding.minimum_order,
-                        "exchange_data": holding.exchange_data,
-                    }
+                order = Order(
+                    holding.symbol,
+                    holding.__units_order,
+                    self.currency,
+                    holding.minimum_order,
+                    holding.exchange_data,
                 )
+                orders.append(order)
 
         # return the portfolios pending order to execute this investment strategy
         return orders
@@ -191,9 +206,9 @@ class Portfolio:
         estimated_holdings = deepcopy(self.holdings)
         for order in orders:
             for holding in estimated_holdings:
-                if holding.symbol == order["symbol"]:
-                    sign = 1 if order["buy_or_sell"] == "buy" else -1
-                    holding.amount += order["units"] * sign
+                if holding.symbol == order.symbol:
+                    sign = 1 if order.buy_or_sell == "buy" else -1
+                    holding.amount += order.units * sign
         total_value = sum(
             [holding.price * holding.amount for holding in estimated_holdings]
         )
@@ -207,19 +222,12 @@ class Portfolio:
         return [
             order
             for order in orders
-            if float(abs(order["units"])) < float(order["minimum_order"])
+            if float(abs(order.units)) < float(order.minimum_order)
         ]
 
     def process_orders(self, exchange, orders, mock=True):
-        for order in [order for order in orders if order["units"]]:
-            (success, info) = exchange.process_order(
-                order["buy_or_sell"],
-                order["symbol"],
-                order["currency"],
-                order["units"],
-                exchange_data=order["exchange_data"],
-                mock=mock,
-            )
+        for order in [order for order in orders if order.units]:
+            (success, info) = exchange.process_order(order, mock=mock)
             if success:
                 log.info("The order executed successfully: " + str(info))
             else:

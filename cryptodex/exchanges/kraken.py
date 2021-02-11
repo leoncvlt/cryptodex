@@ -17,6 +17,7 @@ SYMBOLS = {
     "xlm": "xxlm",
 }
 
+
 class KrakenExchange(Exchange):
     def __init__(self, key):
         self.api = krakenex.API()
@@ -69,24 +70,25 @@ class KrakenExchange(Exchange):
             asset["price"] = tickers[pair_name]["c"][0]
         return assets_data
 
-    def process_order(
-        self, buy_or_sell, symbol, currency, units, exchange_data={}, mock=True
-    ):
-        if not "asset_pair" in exchange_data:
+    def process_order(self, order, mock=True):
+        if not "asset_pair" in order.exchange_data:
             log.debug(
                 "asset_pair parameter not found in exchange_data, attempting to build manually"
             )
-        pair = exchange_data.get("asset_pair", f"{symbol.upper()}{currency.upper()}")
+        pair = order.exchange_data.get(
+            "asset_pair", f"{order.symbol.upper()}{order.currency.upper()}"
+        )
         log.info(
-            f"Processing {buy_or_sell.upper()} order for {round(units, 5)} units of {symbol} ({pair})"
+            f"Processing {order.buy_or_sell.upper()} order for "
+            f"{round(order.units, 5)} units of {order.symbol} ({pair})"
         )
         order_result = self.api.query_private(
             "AddOrder",
             {
                 "pair": pair,
-                "type": buy_or_sell,
+                "type": order.buy_or_sell,
                 "ordertype": "market",
-                "volume": units,
+                "volume": order.units,
                 "validate": mock,
             },
         )

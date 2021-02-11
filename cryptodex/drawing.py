@@ -45,15 +45,13 @@ def display_orders(orders):
     table.add_column("Min. Order")
     # table.add_column("Fee")
     for order in orders:
-        name = f"[bold]{order['symbol'].upper()}"
-        buy_or_sell = order["buy_or_sell"].upper()
-        buy_sell_units = str(round(order.get("units"), 5))
+        name = f"[bold]{order.symbol.upper()}"
+        buy_or_sell = order.buy_or_sell.upper()
+        buy_sell_units = str(round(order.units, 5))
         min_order_color = (
-            "red"
-            if float(abs(order["units"])) < float(order["minimum_order"])
-            else "green"
+            "red" if float(abs(order.units)) < float(order.minimum_order) else "green"
         )
-        min_order = f"[{min_order_color}]{order['minimum_order']}[/{min_order_color}]"
+        min_order = f"[{min_order_color}]{order.minimum_order}[/{min_order_color}]"
         table.add_row(
             name,
             buy_or_sell,
