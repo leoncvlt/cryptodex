@@ -24,14 +24,14 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Target %")
     table.add_column("Drift %")
     coins_to_display = [
-        asset for asset in assets if not asset.get("stale", False) or asset["amount"] > 0
+        holding for holding in assets if not holding.stale or holding.amount > 0
     ]
-    for coin in coins_to_display:
-        name = f"[bold]{coin['symbol'].upper()}[/bold] ({coin['name']})"
-        amount = format_currency((coin["price"] * coin["amount"]), currency)
-        allocation = f"{round(coin['allocation'], 2)}%"
-        target = f"{round(coin['target'], 2)}%"
-        drift = f"{round(coin['drift'], 2)}%"
+    for holding in coins_to_display:
+        name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
+        amount = format_currency((holding.price * holding.amount), currency)
+        allocation = f"{round(holding.allocation, 2)}%"
+        target = f"{round(holding.target, 2)}%"
+        drift = f"{round(holding.drift, 2)}%"
 
         table.add_row(name, amount, allocation, target, drift)
     console.print(table)

@@ -83,7 +83,7 @@ def main():
         portfolio.connect(exchange)
 
     console.print("[bold] Your current portfolio:")
-    display_portfolio_assets(portfolio.data, args.currency)
+    display_portfolio_assets(portfolio.holdings, args.currency)
 
     if args.invest:
         console.print(

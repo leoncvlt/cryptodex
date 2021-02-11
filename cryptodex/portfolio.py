@@ -11,12 +11,22 @@ from pycoingecko import CoinGeckoAPI
 log = logging.getLogger(__name__)
 console = Console()
 
-# from dataclasses import dataclass
+from dataclasses import dataclass, field
 
-# @dataclass
-# class Coin:
-#     symbol: str
-#     allocation: float
+
+@dataclass
+class Holding:
+    symbol: str
+    name: str
+    market_cap: float
+    price: float = 0.0
+    fee: float = 0.0
+    amount: str = 0
+    stale: bool = False
+    target: float = 0.0
+    allocation: float = 0.0
+    minimum_order: float = 0
+    exchange_data: dict = field(default_factory=dict)
 
 
 class Portfolio:
@@ -37,7 +47,7 @@ class Portfolio:
             # if we reached the max amount of holdings to have in the portfolio
             # and there are no more owned assets to parse, stop iterating
             is_over_max_holdings = (
-                len(self.data) >= self.model["assets"] + self.model["max_stale"]
+                len(self.holdings) >= self.model["assets"] + self.model["max_stale"]
             )
             if is_over_max_holdings and not len(parsed_owned_assets):
                 break
@@ -57,31 +67,26 @@ class Portfolio:
             # if the asset is available on this exchange for trading
             # with the provided currency
             if symbol in available_assets:
-                data = {
-                    "symbol": symbol,
-                    "name": coin["name"],
-                    "market_cap": coin["market_cap"],
-                }
+                holding = Holding(symbol, coin["name"], coin["market_cap"])
                 # if we reached the max amount of holdings to have in the portfolio,
                 # mark this asset as stale (won't be bought or sold)
-                if len(self.data) >= self.model["assets"]:
-                    data["stale"] = True
+                if len(self.holdings) >= self.model["assets"]:
+                    holding.stale = True
 
                 # if we don't own the asset, add it to the portfolio only if we are
-                # under the max amount of holdings to have, and set its amount to zero
+                # under the max amount of holdings to have, and its amount stays zero
                 if not symbol in parsed_owned_assets.keys():
-                    data["amount"] = 0
                     if not is_over_max_holdings:
-                        self.data.append(data)
+                        self.holdings.append(holding)
                 # otherwise, we own the asset already, parse the number of units we own
                 # remove it to the list of owned assets to parse
                 # and add it to the portfolio regardless of the max amount of holdings
                 # (owned assets that are added after that amount is reached will
                 # be marked as stale anyway and won't be bought or sold)
                 else:
-                    data["amount"] = float(parsed_owned_assets[symbol])
+                    holding.amount = float(parsed_owned_assets[symbol])
                     del parsed_owned_assets[symbol]
-                    self.data.append(data)
+                    self.holdings.append(holding)
             # else:
             #     log.warning(
             #         f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.currency}"
@@ -94,21 +99,21 @@ class Portfolio:
         # create a list of all the symbols of the assets we hold in the portfolio,
         # and pass that to the get_assets_data() method on the exchange to get
         # the exchange data for each asset
-        assets_list = [asset["symbol"] for asset in self.data]
+        assets_list = [holding.symbol for holding in self.holdings]
         assets_data = exchange.get_assets_data(assets_list, self.currency)
 
         # go through each asset in our portfolio and, finding its corresponding asset
         # in the exchange's data list, fill up its price / fee / minimum order fields
-        for asset in self.data:
-            exchange_symbol = exchange.get_symbol(asset["symbol"])
+        for holding in self.holdings:
+            exchange_symbol = exchange.get_symbol(holding.symbol)
             exchange_asset = next(
                 (a for a in assets_data if a["symbol"] == exchange_symbol), None
             )
             if exchange_asset:
-                asset["price"] = float(exchange_asset["price"])
-                asset["fee"] = float(exchange_asset["fee"])
-                asset["minimum_order"] = exchange_asset["minimum_order"]
-                asset["exchange_data"] = exchange_asset["exchange_data"]
+                holding.price = float(exchange_asset["price"])
+                holding.fee = float(exchange_asset["fee"])
+                holding.minimum_order = exchange_asset["minimum_order"]
+                holding.exchange_data = exchange_asset["exchange_data"]
             else:
                 console.warning(
                     f"Unable to fetch data for asset {exchange_symbol} "
@@ -122,86 +127,81 @@ class Portfolio:
         self.calculate_owned_allocation()
         self.calculate_drift()
 
-    def invest(self, amount=0, rebalance=True, prioritize_targets=False):
+    def invest(self, amount=0, rebalance=True):
         orders = []
-        portfolio = deepcopy(self.data)
-        coins_above_target = [c for c in portfolio if c["drift"] > 0]
-        coins_below_target = [c for c in portfolio if c["drift"] < 0]
+        funds = amount
+        holdings = deepcopy(self.holdings)
+        holdings_above_target = [h for h in holdings if h.drift > 0]
+        holdings_below_target = [h for h in holdings if h.drift < 0]
 
         # get the total value of the current portfolio
-        total_value = sum([coin["price"] * coin["amount"] for coin in portfolio])
+        total_value = sum([holding.price * holding.amount for holding in holdings])
         if rebalance:
-            for coin in coins_above_target:
+            for holding in holdings_above_target:
                 # for each coin whose allocation is drifting above the target,
                 # sell the amount required to put it back into target
                 # and add the revenue of the sell order to the availabel fund
-                coin_value = coin["price"] * coin["amount"]
-                coin["currency_order"] = (coin["drift"] * coin_value) / 100
-                amount += coin["currency_order"]
+                holding_value = holding.price * holding.amount
+                holding.__currency_order = (holding.drift * holding_value) / 100
+                funds += holding.__currency_order
 
-            # redistribution_total_allocation = sum(
-            #     coin["target"] for coin in coins_below_target
-            # )
-            # for coin in coins_below_target:
-            #     coin["currency_order"] = (
-            #         -(coin["target"] * redistribution_funds)
-            #         / redistribution_total_allocation
-            #     )
-
-            for coin in coins_below_target:
+            for holding in holdings_below_target:
                 # for each coin whose allocation is drifting below the target,
                 # calculate the amount of funds needed to put it back into target
                 # if enough funds to do so are available, set the buy order,
                 # update the available fund and do the same for the next coin
-                funds_needed_redist = abs(total_value * coin["drift"]) / 100
-                if amount - funds_needed_redist > 0:
+                funds_needed_redist = abs(total_value * holding.drift) / 100
+                if funds - funds_needed_redist > 0:
                     # we use abs() above, and set a negative value here as
                     # buy orders are represented by a negative number
-                    coin["currency_order"] = -funds_needed_redist
-                    amount -= funds_needed_redist
+                    holding.__currency_order = -funds_needed_redist
+                    funds -= funds_needed_redist
                 else:
                     log.warning("Not enough funds to rebalance all assets.")
                     break
 
-        for coin in portfolio:
-            if coin.get("stale", False):
+        for holding in holdings:
+            if holding.stale:
                 continue
             # spread the available funds into buy orders for all assets,
             # proportionally to their target weighting
-            coin["currency_order"] = (
-                coin.get("currency_order", 0) - (coin["target"] * amount) / 100
+            holding.__currency_order = (
+                holding.__currency_order - (holding.target * funds) / 100
             )
-            coin["units_order"] = coin["currency_order"] / coin["price"]
+            holding.__units_order = holding.__currency_order / holding.price
 
             # create an order object to summarize the transaction for the asset,
             # and add it to the pending orders list
-            orders.append(
-                {
-                    "symbol": coin["symbol"],
-                    "units": abs(coin["units_order"]),
-                    "buy_or_sell": "buy" if coin["units_order"] < 0 else "sell",
-                    "currency": self.currency,
-                    "minimum_order": coin["minimum_order"],
-                    "exchange_data": coin.get("exchange_data", {}),
-                }
-            )
+            if holding.__units_order:
+                orders.append(
+                    {
+                        "symbol": holding.symbol,
+                        "units": abs(holding.__units_order),
+                        "buy_or_sell": "buy" if holding.__units_order < 0 else "sell",
+                        "currency": self.currency,
+                        "minimum_order": holding.minimum_order,
+                        "exchange_data": holding.exchange_data,
+                    }
+                )
 
         # return the portfolios pending order to execute this investment strategy
         return orders
 
     def get_predicted_portfolio(self, orders):
-        portfolio = deepcopy(self.data)
+        estimated_holdings = deepcopy(self.holdings)
         for order in orders:
-            for coin in portfolio:
-                if coin["symbol"] == order["symbol"]:
+            for holding in estimated_holdings:
+                if holding.symbol == order["symbol"]:
                     sign = 1 if order["buy_or_sell"] == "buy" else -1
-                    coin["amount"] += order["units"] * sign
-        total_value = sum([coin["price"] * coin["amount"] for coin in portfolio])
-        for coin in portfolio:
-            coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
-            coin["drift"] = coin["allocation"] - coin["target"]
+                    holding.amount += order["units"] * sign
+        total_value = sum(
+            [holding.price * holding.amount for holding in estimated_holdings]
+        )
+        for holding in estimated_holdings:
+            holding.allocation = (100 * holding.price * holding.amount) / total_value
+            holding.drift = holding.allocation - holding.target
 
-        return portfolio
+        return estimated_holdings
 
     def get_invalid_orders(self, orders):
         return [
@@ -226,30 +226,32 @@ class Portfolio:
                 log.warning("There was a problem with the order: " + str(info))
 
     def allocate_by_sqrt_market_cap(self):
-        #TODO: Exclude stale assets
-        total_sqrt_market_cap = sum([math.sqrt(coin["market_cap"]) for coin in self.data])
-        for coin in self.data:
-            if not coin.get("stale", False):
-                coin["target"] = (
-                    100 * math.sqrt(coin["market_cap"]) / total_sqrt_market_cap
+        # TODO: Exclude stale assets
+        total_sqrt_market_cap = sum(
+            [math.sqrt(holding.market_cap) for holding in self.holdings]
+        )
+        for holding in self.holdings:
+            if not holding.stale:
+                holding.target = (
+                    100 * math.sqrt(holding.market_cap) / total_sqrt_market_cap
                 )
             else:
-                coin["target"] = 0
+                holding.target = 0
 
     def calculate_owned_allocation(self):
-        #TODO: Exclude stale assets
-        total_value = sum([coin["price"] * coin["amount"] for coin in self.data])
-        for coin in self.data:
+        # TODO: Exclude stale assets
+        total_value = sum([holding.price * holding.amount for holding in self.holdings])
+        for holding in self.holdings:
             if total_value:
-                coin["allocation"] = (100 * coin["price"] * coin["amount"]) / total_value
+                holding.allocation = (100 * holding.price * holding.amount) / total_value
             else:
-                coin["allocation"] = 0
+                holding.allocation = 0
 
     def calculate_drift(self):
-        for coin in self.data:
-            coin["drift"] = coin["allocation"] - coin["target"]
+        for holding in self.holdings:
+            holding.drift = holding.allocation - holding.target
 
     def __init__(self, model, currency):
         self.model = toml.load(model)
         self.currency = currency
-        self.data = []
+        self.holdings = []
