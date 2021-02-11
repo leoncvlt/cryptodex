@@ -1,6 +1,5 @@
 __version__ = "0.1.0"
 
-
 import os
 import sys
 import logging
@@ -11,7 +10,7 @@ from rich.logging import RichHandler
 from rich.traceback import install as install_rich_tracebacks
 
 from portfolio import Portfolio
-from exchange_adapter import ExchangeAdapter
+from exchanges.kraken import KrakenExchange
 from utils import ask
 from drawing import display_portfolio_assets, display_orders, format_currency
 
@@ -22,7 +21,7 @@ console = Console()
 
 def main():
     argparser = argparse.ArgumentParser(
-        description="Generate static websites from Notion.so pages"
+        description="Automates creation and management of a cryptocurrency index fund"
     )
     argparser.add_argument(
         "--portfolio",
@@ -66,6 +65,9 @@ def main():
     )
     args = argparser.parse_args()
 
+    if not args.currency:
+        argparser.error("Please provide a currency")
+
     # configure logging for the application
     log = logging.getLogger()
     log.setLevel(logging.INFO if not args.verbose else logging.DEBUG)
@@ -76,7 +78,7 @@ def main():
 
     # start the application
     portfolio = Portfolio(args.portfolio, args.currency)
-    exchange = ExchangeAdapter(args.private_key)
+    exchange = KrakenExchange(args.private_key)
     with console.status("[bold green]Connecting to exchange..."):
         portfolio.connect(exchange)
 

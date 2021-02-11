@@ -1,7 +1,8 @@
+from exchanges.exchange import Exchange
+
 import logging
 
 from rich.console import Console
-
 import krakenex
 
 log = logging.getLogger(__name__)
@@ -16,8 +17,7 @@ SYMBOLS = {
     "xlm": "xxlm",
 }
 
-# https://www.kraken.com/en-gb/features/api#add-standard-order
-class ExchangeAdapter:
+class KrakenExchange(Exchange):
     def __init__(self, key):
         self.api = krakenex.API()
         self.api.load_key(key.name)
