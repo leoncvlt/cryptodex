@@ -11,7 +11,6 @@ from rich.traceback import install as install_rich_tracebacks
 from portfolio import Portfolio
 from exchanges.exchange import Exchange
 from exchanges.kraken import KrakenExchange
-from utils import ask
 from drawing import display_portfolio_assets, display_orders, format_currency
 
 log = logging.getLogger(__name__)
