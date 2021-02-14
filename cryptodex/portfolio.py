@@ -25,8 +25,10 @@ class Holding:
     stale: bool = False
     target: float = 0.0
     allocation: float = 0.0
+    drift: float = 0.0
     minimum_order: float = 0
     exchange_data: dict = field(default_factory=dict)
+    order_data: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -48,6 +50,7 @@ class Order:
 
 class Portfolio:
     def connect(self, exchange):
+        self.holdings = []
         cg = CoinGeckoAPI()
         market_data = cg.get_coins_markets(self.currency)
         owned_assets = exchange.get_owned_assets()
@@ -96,10 +99,10 @@ class Portfolio:
                     if not is_over_max_holdings:
                         self.holdings.append(holding)
                 # otherwise, we own the asset already, parse the number of units we own
-                # remove it to the list of owned assets to parse
-                # and add it to the portfolio regardless of the max amount of holdings
-                # (owned assets that are added after that amount is reached will
-                # be marked as stale anyway and won't be bought or sold)
+                # and remove it from the list of owned assets to parse
+                # add it to the portfolio regardless of the max amount of holdings
+                # (owned assets that are added after the max amount of holdings is reached
+                # will be marked as stale anyway and won't be bought or sold)
                 else:
                     holding.amount = float(parsed_owned_assets[symbol])
                     del parsed_owned_assets[symbol]
@@ -159,8 +162,8 @@ class Portfolio:
                 # sell the amount required to put it back into target
                 # and add the revenue of the sell order to the availabel fund
                 holding_value = holding.price * holding.amount
-                holding.__currency_order = (holding.drift * holding_value) / 100
-                funds += holding.__currency_order
+                holding.order_data["currency"] = (holding.drift * holding_value) / 100
+                funds += holding.order_data["currency"]
 
             for holding in holdings_below_target:
                 # for each coin whose allocation is drifting below the target,
@@ -171,7 +174,7 @@ class Portfolio:
                 if funds - funds_needed_redist > 0:
                     # we use abs() above, and set a negative value here as
                     # buy orders are represented by a negative number
-                    holding.__currency_order = -funds_needed_redist
+                    holding.order_data["currency"] = -funds_needed_redist
                     funds -= funds_needed_redist
                 else:
                     log.warning("Not enough funds to rebalance all assets.")
@@ -182,17 +185,17 @@ class Portfolio:
                 continue
             # spread the available funds into buy orders for all assets,
             # proportionally to their target weighting
-            holding.__currency_order = (
-                holding.__currency_order - (holding.target * funds) / 100
+            holding.order_data["currency"] = (
+                holding.order_data.get("currency", 0) - (holding.target * funds) / 100
             )
-            holding.__units_order = holding.__currency_order / holding.price
+            holding.order_data["units"] = holding.order_data["currency"] / holding.price
 
             # create an order object to summarize the transaction for the asset,
             # and add it to the pending orders list
-            if holding.__units_order:
+            if holding.order_data.get("units", None):
                 order = Order(
                     holding.symbol,
-                    holding.__units_order,
+                    holding.order_data["units"],
                     self.currency,
                     holding.minimum_order,
                     holding.exchange_data,
@@ -260,6 +263,6 @@ class Portfolio:
             holding.drift = holding.allocation - holding.target
 
     def __init__(self, model, currency):
-        self.model = toml.load(model)
+        self.model = model
         self.currency = currency
         self.holdings = []

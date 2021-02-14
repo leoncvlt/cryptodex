@@ -19,9 +19,8 @@ SYMBOLS = {
 
 
 class KrakenExchange(Exchange):
-    def __init__(self, key):
-        self.api = krakenex.API()
-        self.api.load_key(key.name)
+    def __init__(self, key, secret):
+        self.api = krakenex.API(key, secret)
         return
 
     def get_symbol(self, symbol):
