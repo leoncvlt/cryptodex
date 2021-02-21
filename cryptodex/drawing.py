@@ -23,15 +23,19 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Allocation %")
     table.add_column("Target %")
     table.add_column("Drift %")
-    coins_to_display = [
-        holding for holding in assets if not holding.stale or holding.amount > 0
-    ]
-    for holding in coins_to_display:
+    # coins_to_display = [
+    #     holding for holding in assets if not holding.stale or holding.amount > 0
+    # ]
+    for holding in assets:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
         amount = format_currency((holding.price * holding.amount), currency)
-        allocation = f"{holding.allocation:.2f}%"
-        target = f"{holding.target:.2f}%"
-        drift = f"{(holding.allocation - holding.target):.2f}%"
+        allocation = f"{holding.allocation:.2f}%" if not holding.stale else "[dim]-"
+        target = f"{holding.target:.2f}%" if not holding.stale else "[dim]-"
+        drift = (
+            f"{(holding.allocation - holding.target):.2f}%"
+            if not holding.stale
+            else "[dim]-"
+        )
 
         table.add_row(
             name,
@@ -39,9 +43,9 @@ def display_portfolio_assets(assets, currency=None):
             allocation,
             target,
             drift,
-            end_section=(holding == coins_to_display[-1]),
+            end_section=(holding == assets[-1]),
         )
-    total_portfolio_value = sum([h.price * h.amount for h in coins_to_display])
+    total_portfolio_value = sum([h.price * h.amount for h in assets])
     table.add_row("[bold]Total", format_currency(total_portfolio_value, currency))
     console.print(table)
 

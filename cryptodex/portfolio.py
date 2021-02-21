@@ -33,8 +33,8 @@ class Holding:
 @dataclass
 class Order:
     symbol: str
-    units: float
     currency: str
+    units: float
     cost: float
     buy_or_sell: str = field(init=False)
     minimum_order: float = 0.0
@@ -152,31 +152,40 @@ class Portfolio:
         holdings_above_target = [h for h in holdings if (h.allocation - h.target) > 0]
         holdings_below_target = [h for h in holdings if (h.allocation - h.target) < 0]
 
-        # get the total value of the current portfolio
-        total_value = sum([holding.price * holding.amount for holding in holdings])
+        def get_rebalanced_holding_amount(holding):
+            if holding.allocation:
+                # if own the holding in any amount, the target value will be the
+                # difference between the current amount and the amount needed
+                # to direct its allocation back towards the target value
+                holding_value = holding.price * holding.amount
+                target_value = (holding_value * holding.target) / holding.allocation
+                return holding_value - target_value
+            else:
+                # if the allocation of the holding is equal to zero, we don't own any
+                # calculate the target amount by fetching the target % from our total
+                # as a negative value to represent a buy order
+                total_value = sum(
+                    [holding.price * holding.amount for holding in holdings]
+                )
+                return -(total_value / 100) * holding.target
+
         if rebalance:
             for holding in holdings_above_target:
                 # for each coin whose allocation is drifting above the target,
                 # sell the amount required to put it back into target
-                # and add the revenue of the sell order to the availabel fund
-                holding_value = holding.price * holding.amount
-                target_value = (holding_value * holding.target) / holding.allocation
-                holding.order_data["currency"] = holding_value - target_value
+                # and add the revenue from the sale to the available funds
+                holding.order_data["currency"] = get_rebalanced_holding_amount(holding)
                 funds += holding.order_data["currency"]
 
             for holding in holdings_below_target:
                 # for each coin whose allocation is drifting below the target,
                 # calculate the amount of funds needed to put it back into target
-                # if enough funds to do so are available, set the buy order,
-                # update the available funds and do the same for the next coin
-                holding_value = holding.price * holding.amount
-                target_value = (holding_value * holding.target) / holding.allocation
-                funds_needed_redist = target_value - holding_value
-                if funds - funds_needed_redist > 0:
-                    # we use abs() above, and set a negative value here as
-                    # buy orders are represented by a negative number
-                    holding.order_data["currency"] = -funds_needed_redist
-                    funds -= funds_needed_redist
+                # and if enough funds to do so are available, set the buy order
+                funds_needed_redist = get_rebalanced_holding_amount(holding)
+                # we use abs() as buy orders are represented by a negative number
+                if funds - abs(funds_needed_redist) > 0:
+                    holding.order_data["currency"] = funds_needed_redist
+                    funds += funds_needed_redist
                 else:
                     log.warning("Not enough funds to rebalance all assets.")
                     break
@@ -184,11 +193,14 @@ class Portfolio:
         for holding in holdings:
             if holding.stale:
                 continue
-            # spread the available funds into buy orders for all assets,
+            # create an empty currency order field if none is present
+            holding.order_data["currency"] = holding.order_data.get("currency", 0)
+
+            # spread the available funds into currency orders for all assets,
             # proportionally to their target weighting
-            holding.order_data["currency"] = (
-                holding.order_data.get("currency", 0) - (holding.target * funds) / 100
-            )
+            holding.order_data["currency"] -= (holding.target * funds) / 100
+
+            # convert the currency orders into unit orders based on the holding price
             holding.order_data["units"] = holding.order_data["currency"] / holding.price
 
             # create an order object to summarize the transaction for the asset,
@@ -196,8 +208,8 @@ class Portfolio:
             if holding.order_data.get("units", None):
                 order = Order(
                     holding.symbol,
-                    holding.order_data["units"],
                     self.currency,
+                    holding.order_data["units"],
                     holding.order_data["currency"],
                     holding.minimum_order,
                     holding.exchange_data,
