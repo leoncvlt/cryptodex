@@ -25,7 +25,6 @@ class Holding:
     stale: bool = False
     target: float = 0.0
     allocation: float = 0.0
-    drift: float = 0.0
     minimum_order: float = 0
     exchange_data: dict = field(default_factory=dict)
     order_data: dict = field(default_factory=dict)
@@ -36,6 +35,7 @@ class Order:
     symbol: str
     units: float
     currency: str
+    cost: float
     buy_or_sell: str = field(init=False)
     minimum_order: float = 0.0
     exchange_data: dict = field(default_factory=dict)
@@ -142,17 +142,15 @@ class Portfolio:
                 )
 
         # given that we have the values of each asset in the portfolio,
-        # calculate the current allocation of all assets and how much
-        # they are drifting from their target allocation
+        # calculate the current allocation of all assets
         self.calculate_owned_allocation()
-        self.calculate_drift()
 
     def invest(self, amount=0, rebalance=True):
         orders = []
         funds = amount
-        holdings = deepcopy(self.holdings)
-        holdings_above_target = [h for h in holdings if h.drift > 0]
-        holdings_below_target = [h for h in holdings if h.drift < 0]
+        holdings = deepcopy([holding for holding in self.holdings if not holding.stale])
+        holdings_above_target = [h for h in holdings if (h.allocation - h.target) > 0]
+        holdings_below_target = [h for h in holdings if (h.allocation - h.target) < 0]
 
         # get the total value of the current portfolio
         total_value = sum([holding.price * holding.amount for holding in holdings])
@@ -162,15 +160,18 @@ class Portfolio:
                 # sell the amount required to put it back into target
                 # and add the revenue of the sell order to the availabel fund
                 holding_value = holding.price * holding.amount
-                holding.order_data["currency"] = (holding.drift * holding_value) / 100
+                target_value = (holding_value * holding.target) / holding.allocation
+                holding.order_data["currency"] = holding_value - target_value
                 funds += holding.order_data["currency"]
 
             for holding in holdings_below_target:
                 # for each coin whose allocation is drifting below the target,
                 # calculate the amount of funds needed to put it back into target
                 # if enough funds to do so are available, set the buy order,
-                # update the available fund and do the same for the next coin
-                funds_needed_redist = abs(total_value * holding.drift) / 100
+                # update the available funds and do the same for the next coin
+                holding_value = holding.price * holding.amount
+                target_value = (holding_value * holding.target) / holding.allocation
+                funds_needed_redist = target_value - holding_value
                 if funds - funds_needed_redist > 0:
                     # we use abs() above, and set a negative value here as
                     # buy orders are represented by a negative number
@@ -197,6 +198,7 @@ class Portfolio:
                     holding.symbol,
                     holding.order_data["units"],
                     self.currency,
+                    holding.order_data["currency"],
                     holding.minimum_order,
                     holding.exchange_data,
                 )
@@ -206,7 +208,7 @@ class Portfolio:
         return orders
 
     def get_predicted_portfolio(self, orders):
-        estimated_holdings = deepcopy(self.holdings)
+        estimated_holdings = deepcopy([h for h in self.holdings if not h.stale])
         for order in orders:
             for holding in estimated_holdings:
                 if holding.symbol == order.symbol:
@@ -217,30 +219,12 @@ class Portfolio:
         )
         for holding in estimated_holdings:
             holding.allocation = (100 * holding.price * holding.amount) / total_value
-            holding.drift = holding.allocation - holding.target
 
         return estimated_holdings
 
-    def get_invalid_orders(self, orders):
-        return [
-            order
-            for order in orders
-            if float(abs(order.units)) < float(order.minimum_order)
-        ]
-
-    def process_orders(self, exchange, orders, mock=True):
-        for order in [order for order in orders if order.units]:
-            (success, info) = exchange.process_order(order, mock=mock)
-            if success:
-                log.info("The order executed successfully: " + str(info))
-            else:
-                log.warning("There was a problem with the order: " + str(info))
-
     def allocate_by_sqrt_market_cap(self):
-        # TODO: Exclude stale assets
-        total_sqrt_market_cap = sum(
-            [math.sqrt(holding.market_cap) for holding in self.holdings]
-        )
+        non_stale_holdings = [h for h in self.holdings if not h.stale]
+        total_sqrt_market_cap = sum([math.sqrt(h.market_cap) for h in non_stale_holdings])
         for holding in self.holdings:
             if not holding.stale:
                 holding.target = (
@@ -250,17 +234,13 @@ class Portfolio:
                 holding.target = 0
 
     def calculate_owned_allocation(self):
-        # TODO: Exclude stale assets
-        total_value = sum([holding.price * holding.amount for holding in self.holdings])
+        non_stale_holdings = [h for h in self.holdings if not h.stale]
+        total_value = sum([h.price * h.amount for h in non_stale_holdings])
         for holding in self.holdings:
-            if total_value:
+            if total_value and not holding.stale:
                 holding.allocation = (100 * holding.price * holding.amount) / total_value
             else:
                 holding.allocation = 0
-
-    def calculate_drift(self):
-        for holding in self.holdings:
-            holding.drift = holding.allocation - holding.target
 
     def __init__(self, model, currency):
         self.model = model

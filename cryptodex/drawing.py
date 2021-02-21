@@ -29,11 +29,20 @@ def display_portfolio_assets(assets, currency=None):
     for holding in coins_to_display:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
         amount = format_currency((holding.price * holding.amount), currency)
-        allocation = f"{round(holding.allocation, 2)}%"
-        target = f"{round(holding.target, 2)}%"
-        drift = f"{round(holding.drift, 2)}%"
+        allocation = f"{holding.allocation:.2f}%"
+        target = f"{holding.target:.2f}%"
+        drift = f"{(holding.allocation - holding.target):.2f}%"
 
-        table.add_row(name, amount, allocation, target, drift)
+        table.add_row(
+            name,
+            amount,
+            allocation,
+            target,
+            drift,
+            end_section=(holding == coins_to_display[-1]),
+        )
+    total_portfolio_value = sum([h.price * h.amount for h in coins_to_display])
+    table.add_row("[bold]Total", format_currency(total_portfolio_value, currency))
     console.print(table)
 
 
@@ -41,13 +50,15 @@ def display_orders(orders):
     table = Table()
     table.add_column("Asset")
     table.add_column("Order Type")
-    table.add_column(f"Units")
+    table.add_column("Units")
+    table.add_column("Balance")
     table.add_column("Min. Order")
     # table.add_column("Fee")
     for order in orders:
         name = f"[bold]{order.symbol.upper()}"
         buy_or_sell = order.buy_or_sell.upper()
-        buy_sell_units = str(round(order.units, 5))
+        buy_sell_units = f"{order.units:.5f}"
+        buy_sell_currency = format_currency(order.cost, order.currency)
         min_order_color = (
             "red" if float(abs(order.units)) < float(order.minimum_order) else "green"
         )
@@ -56,6 +67,7 @@ def display_orders(orders):
             name,
             buy_or_sell,
             buy_sell_units,
+            buy_sell_currency,
             min_order,
             # fee
         )

@@ -3,6 +3,7 @@ __version__ = "0.1.0"
 import os
 import sys
 import logging
+from pathlib import Path
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -31,11 +32,19 @@ class State:
     currency: str
 
 
-@shell(prompt="cryptodex $ ")
+@shell(prompt="cryptodex $ ", hist_file=Path(".temp") / ".history")
 @click.pass_context
 @click.argument("strategy", type=click.File("r"))
-@click.option("-v", "--verbose", is_flag=True)
+@click.option("-v", "--verbose", is_flag=True, help="Increase output verbosity.")
 def app(ctx, strategy, verbose):
+    """
+    Automate and mantain a cryptocurrency-based portfolio tracking the market index.
+
+    STRATEGY: path to the .toml strategy file - see README for more info
+
+    Run the script without any commands to start an interactive shell.
+    """
+
     # configure logging for the application
     log = logging.getLogger()
     log.setLevel(logging.INFO if not verbose else logging.DEBUG)
@@ -54,13 +63,13 @@ def app(ctx, strategy, verbose):
     ctx.obj = State(portfolio, exchange, currency)
 
 
-@app.command()
+@app.command(help="Re-fetch current assets prices / allocations")
 @click.pass_obj
 def refresh(state):
     state.portfolio.connect(state.exchange)
 
 
-@app.command()
+@app.command(help="Display your current portfolio balance")
 @click.pass_obj
 def balance(state):
     display_portfolio_assets(state.portfolio.holdings, state.currency)
@@ -69,7 +78,17 @@ def balance(state):
 def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True):
     with console.status("[bold green]Calculating investments..."):
         orders = portfolio.invest(amount=amount, rebalance=rebalance)
+
+    console.print("[bold]The following orders will be sent to the exchange:")
     display_orders(orders)
+
+    invalid_orders = [
+        order for order in orders if float(abs(order.units)) < float(order.minimum_order)
+    ]
+    if invalid_orders:
+        console.print(
+            f"[red]{len(invalid_orders)} orders do not meet the minimum order criteria"
+        )
 
     if estimate:
         console.print(f"\n[bold]Estimated portfolio after orders are processed:")
@@ -77,12 +96,6 @@ def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True
         console.print(
             "[yellow]This estimate is based on market prices at script execution time. "
             "Actual order numbers might differ slightly."
-        )
-
-    invalid_orders = portfolio.get_invalid_orders(orders)
-    if invalid_orders:
-        console.print(
-            f"[red]{len(invalid_orders)} orders do not meet the minimum order criteria"
         )
 
     if mock:
@@ -97,15 +110,34 @@ def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True
         )
 
     if click.confirm("Do you want to continue?"):
-        portfolio.process_orders(exchange, orders, mock=mock)
+        for order in [order for order in orders if order.units]:
+            (success, info) = exchange.process_order(order, mock=mock)
+            if success:
+                log.info("The order executed successfully: " + str(info))
+            else:
+                log.warning("There was a problem with the order: " + str(info))
 
 
-@app.command()
+@app.command(
+    help="Invest a lump sum into the portfolio according to its assets' allocations"
+)
 @click.pass_obj
-@click.option("--amount", default=0)
-@click.option("--estimate", is_flag=True)
-@click.option("--rebalance/--no-rebalance", default=True)
-@click.option("--mock/--no-mock", default=True)
+@click.argument("amount", default=0)
+@click.option(
+    "--estimate",
+    is_flag=True,
+    help="Estimate and display the portfolio balance after the sale",
+)
+@click.option(
+    "--rebalance/--no-rebalance",
+    default=True,
+    help="Rebalance the portfolio towards its planned allocation during the purchase",
+)
+@click.option(
+    "--mock/--no-mock",
+    default=True,
+    help="Only validate orders, do not send them to the exchange",
+)
 def buy(state, amount, rebalance, estimate, mock):
     invest(
         state.portfolio,
@@ -118,12 +150,26 @@ def buy(state, amount, rebalance, estimate, mock):
     )
 
 
-@app.command()
+@app.command(
+    help="Sell the equivalent of a lump sum in assets units according to their allocations"
+)
 @click.pass_obj
-@click.option("--amount", default=0)
-@click.option("--estimate", is_flag=True)
-@click.option("--rebalance/--no-rebalance", default=True)
-@click.option("--mock/--no-mock", default=True)
+@click.argument("amount", default=0)
+@click.option(
+    "--estimate",
+    is_flag=True,
+    help="Estimate and display the portfolio balance after the sale",
+)
+@click.option(
+    "--rebalance/--no-rebalance",
+    default=True,
+    help="Rebalance the portfolio towards its planned allocation during the sale",
+)
+@click.option(
+    "--mock/--no-mock",
+    default=True,
+    help="Only validate orders, do not send them to the exchange",
+)
 def sell(state, amount, rebalance, estimate, mock):
     invest(
         state.portfolio,
