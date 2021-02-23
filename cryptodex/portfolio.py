@@ -23,6 +23,7 @@ class Holding:
     fee: float = 0.0
     amount: str = 0
     stale: bool = False
+    obsolete: bool = False
     target: float = 0.0
     allocation: float = 0.0
     minimum_order: float = 0
@@ -61,14 +62,15 @@ class Portfolio:
         # in order to keep track of owned assets we add to the portfolio
         parsed_owned_assets = deepcopy(owned_assets)
 
+        total_holdings = self.model["assets"] + self.model["max_stale"]
+
         # iterate throught the data of every asset in the market as provided by the
         # coingecko api, starting from the ones with the highest market cap
         for coin in market_data:
             # if we reached the max amount of holdings to have in the portfolio
             # and there are no more owned assets to parse, stop iterating
-            is_over_max_holdings = (
-                len(self.holdings) >= self.model["assets"] + self.model["max_stale"]
-            )
+            current_holdings = len(self.holdings)
+            is_over_max_holdings = current_holdings >= total_holdings
             if is_over_max_holdings and not len(parsed_owned_assets):
                 break
 
@@ -90,8 +92,11 @@ class Portfolio:
                 holding = Holding(symbol, coin["name"], coin["market_cap"])
                 # if we reached the max amount of holdings to have in the portfolio,
                 # mark this asset as stale (won't be bought or sold)
-                if len(self.holdings) >= self.model["assets"]:
-                    holding.stale = True
+                if current_holdings > self.model["assets"]:
+                    if current_holdings <= total_holdings:
+                        holding.stale = True
+                    else:
+                        holding.obsolete = True
 
                 # if we don't own the asset, add it to the portfolio only if we are
                 # under the max amount of holdings to have, and its amount stays zero
@@ -149,46 +154,32 @@ class Portfolio:
         orders = []
         funds = amount
         holdings = deepcopy([holding for holding in self.holdings if not holding.stale])
-        holdings_above_target = [h for h in holdings if (h.allocation - h.target) > 0]
-        holdings_below_target = [h for h in holdings if (h.allocation - h.target) < 0]
+        total_value = sum([holding.price * holding.amount for holding in holdings])
 
-        def get_rebalanced_holding_amount(holding):
-            if holding.allocation:
-                # if own the holding in any amount, the target value will be the
+        if rebalance:
+            for holding in holdings:
+                # calculate the rebalanced order value for the holding as the
                 # difference between the current amount and the amount needed
                 # to direct its allocation back towards the target value
                 holding_value = holding.price * holding.amount
-                target_value = (holding_value * holding.target) / holding.allocation
-                return holding_value - target_value
-            else:
-                # if the allocation of the holding is equal to zero, we don't own any
-                # calculate the target amount by fetching the target % from our total
-                # as a negative value to represent a buy order
-                total_value = sum(
-                    [holding.price * holding.amount for holding in holdings]
-                )
-                return -(total_value / 100) * holding.target
-
-        if rebalance:
-            for holding in holdings_above_target:
-                # for each coin whose allocation is drifting above the target,
-                # sell the amount required to put it back into target
-                # and add the revenue from the sale to the available funds
-                holding.order_data["currency"] = get_rebalanced_holding_amount(holding)
-                funds += holding.order_data["currency"]
-
-            for holding in holdings_below_target:
-                # for each coin whose allocation is drifting below the target,
-                # calculate the amount of funds needed to put it back into target
-                # and if enough funds to do so are available, set the buy order
-                funds_needed_redist = get_rebalanced_holding_amount(holding)
-                # we use abs() as buy orders are represented by a negative number
-                if funds - abs(funds_needed_redist) > 0:
-                    holding.order_data["currency"] = funds_needed_redist
-                    funds += funds_needed_redist
+                target_value = (total_value / 100) * holding.target
+                rebalanced_order_value = holding_value - target_value
+                if rebalanced_order_value > 0:  # sell order
+                    # if the rebalanced order value is positive, it means we are
+                    # over its target value and will result in a buy order -
+                    # add the revenue from the sale to the available funds
+                    holding.order_data["currency"] = rebalanced_order_value
+                    funds += rebalanced_order_value
                 else:
-                    log.warning("Not enough funds to rebalance all assets.")
-                    break
+                    # if the rebalanced order value is negative, it means we are
+                    # below its target value and will result in a sell order -
+                    # set it if enough funds to process it are available
+                    if funds - abs(rebalanced_order_value) > 0:
+                        holding.order_data["currency"] = rebalanced_order_value
+                        funds -= abs(rebalanced_order_value)
+                    else:
+                        log.warning("Not enough funds to rebalance all assets.")
+                        break
 
         for holding in holdings:
             if holding.stale:
@@ -235,10 +226,10 @@ class Portfolio:
         return estimated_holdings
 
     def allocate_by_sqrt_market_cap(self):
-        non_stale_holdings = [h for h in self.holdings if not h.stale]
+        non_stale_holdings = [h for h in self.holdings if not h.stale and not h.obsolete]
         total_sqrt_market_cap = sum([math.sqrt(h.market_cap) for h in non_stale_holdings])
         for holding in self.holdings:
-            if not holding.stale:
+            if not holding.stale and not holding.obsolete:
                 holding.target = (
                     100 * math.sqrt(holding.market_cap) / total_sqrt_market_cap
                 )
