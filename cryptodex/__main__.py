@@ -24,6 +24,26 @@ from click_shell import shell
 
 from dataclasses import dataclass
 
+EXCHANGES = {"kraken": KrakenExchange}
+
+
+def validate_strategy(strategy):
+    for field in ["currency", "portfolio", "exchange"]:
+        if not field in strategy:
+            log.critical(f"{field} not defined in strategy file")
+            return False
+
+    for field in ["platform", "key", "secret"]:
+        if not field in strategy["exchange"]:
+            log.critical(f"{field} not defined for the exchange")
+            return False
+
+    if not strategy["exchange"]["platform"] in EXCHANGES:
+        log.error(f"Exchange platform not supported")
+        sys.exit()
+
+    return True
+
 
 @dataclass
 class State:
@@ -55,9 +75,15 @@ def app(ctx, strategy, verbose):
 
     # initialise application
     data = toml.load(strategy)
+    if not validate_strategy(data):
+        sys.exit()
+
     currency = data["currency"]
     portfolio = Portfolio(data["portfolio"], currency)
-    exchange = KrakenExchange(data["exchange"]["key"], data["exchange"]["secret"])
+    exchange_platform = data["exchange"]["platform"]
+    exchange = EXCHANGES[exchange_platform](
+        data["exchange"]["key"], data["exchange"]["secret"]
+    )
     with console.status("[bold green]Connecting to exchange..."):
         portfolio.connect(exchange)
     ctx.obj = State(portfolio, exchange, currency)
@@ -118,9 +144,7 @@ def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True
                 log.warning("There was a problem with the order: " + str(info))
 
 
-@app.command(
-    help="Invest a lump sum into the portfolio according to its assets' allocations"
-)
+@app.command(help="Invest a lump sum into the portfolio")
 @click.pass_obj
 @click.argument("amount", default=0)
 @click.option(
@@ -150,9 +174,7 @@ def buy(state, amount, rebalance, estimate, mock):
     )
 
 
-@app.command(
-    help="Sell the equivalent of a lump sum in assets units according to their allocations"
-)
+@app.command(help="Sell the equivalent of a lump sum from your portfolio")
 @click.pass_obj
 @click.argument("amount", default=0)
 @click.option(
