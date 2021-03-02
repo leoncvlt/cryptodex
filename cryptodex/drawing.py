@@ -24,16 +24,16 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Target %")
     table.add_column("Drift %")
     # coins_to_display = [
-    #     holding for holding in assets if not holding.stale or holding.amount > 0
+    #     holding for holding in assets if not holding.frozen or holding.amount > 0
     # ]
     for holding in assets:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
         amount = format_currency((holding.price * holding.amount), currency)
-        allocation = f"{holding.allocation:.2f}%" if not holding.stale else "[dim]-"
-        target = f"{holding.target:.2f}%" if not holding.stale else "[dim]-"
+        allocation = f"{holding.allocation:.2f}%" if not holding.frozen else "[dim]-"
+        target = f"{holding.target:.2f}%" if not holding.frozen else "[dim]-"
         drift = (
             f"{(holding.allocation - holding.target):.2f}%"
-            if not holding.stale
+            if not holding.frozen
             else "[dim]-"
         )
 

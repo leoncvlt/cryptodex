@@ -22,8 +22,8 @@ class Holding:
     price: float = 0.0
     fee: float = 0.0
     amount: str = 0
+    frozen: bool = False
     stale: bool = False
-    obsolete: bool = False
     target: float = 0.0
     allocation: float = 0.0
     minimum_order: float = 0
@@ -62,7 +62,7 @@ class Portfolio:
         # in order to keep track of owned assets we add to the portfolio
         parsed_owned_assets = deepcopy(owned_assets)
 
-        total_holdings = self.model["assets"] + self.model["max_stale"]
+        total_holdings = self.model["assets"] + self.model["frozen"]
 
         # iterate throught the data of every asset in the market as provided by the
         # coingecko api, starting from the ones with the highest market cap
@@ -91,12 +91,12 @@ class Portfolio:
             if symbol in available_assets:
                 holding = Holding(symbol, coin["name"], coin["market_cap"])
                 # if we reached the max amount of holdings to have in the portfolio,
-                # mark this asset as stale (won't be bought or sold)
+                # mark this asset as frozen (won't be bought or sold)
                 if current_holdings > self.model["assets"]:
                     if current_holdings <= total_holdings:
-                        holding.stale = True
+                        holding.frozen = True
                     else:
-                        holding.obsolete = True
+                        holding.stale = True
 
                 # if we don't own the asset, add it to the portfolio only if we are
                 # under the max amount of holdings to have, and its amount stays zero
@@ -107,7 +107,7 @@ class Portfolio:
                 # and remove it from the list of owned assets to parse
                 # add it to the portfolio regardless of the max amount of holdings
                 # (owned assets that are added after the max amount of holdings is reached
-                # will be marked as stale anyway and won't be bought or sold)
+                # will be marked as frozen anyway and won't be bought or sold)
                 else:
                     holding.amount = float(parsed_owned_assets[symbol])
                     del parsed_owned_assets[symbol]
@@ -153,7 +153,7 @@ class Portfolio:
     def invest(self, amount=0, rebalance=True):
         orders = []
         funds = amount
-        holdings = deepcopy([holding for holding in self.holdings if not holding.stale])
+        holdings = deepcopy([holding for holding in self.holdings if not holding.frozen])
         total_value = sum([holding.price * holding.amount for holding in holdings])
 
         if rebalance:
@@ -182,7 +182,7 @@ class Portfolio:
                         break
 
         for holding in holdings:
-            if holding.stale:
+            if holding.frozen:
                 continue
             # create an empty currency order field if none is present
             holding.order_data["currency"] = holding.order_data.get("currency", 0)
@@ -211,7 +211,7 @@ class Portfolio:
         return orders
 
     def get_predicted_portfolio(self, orders):
-        estimated_holdings = deepcopy([h for h in self.holdings if not h.stale])
+        estimated_holdings = deepcopy([h for h in self.holdings if not h.frozen])
         for order in orders:
             for holding in estimated_holdings:
                 if holding.symbol == order.symbol:
@@ -226,10 +226,10 @@ class Portfolio:
         return estimated_holdings
 
     def allocate_by_sqrt_market_cap(self):
-        non_stale_holdings = [h for h in self.holdings if not h.stale and not h.obsolete]
-        total_sqrt_market_cap = sum([math.sqrt(h.market_cap) for h in non_stale_holdings])
+        non_frozen_holdings = [h for h in self.holdings if not h.frozen and not h.stale]
+        total_sqrt_market_cap = sum([math.sqrt(h.market_cap) for h in non_frozen_holdings])
         for holding in self.holdings:
-            if not holding.stale and not holding.obsolete:
+            if not holding.frozen and not holding.stale:
                 holding.target = (
                     100 * math.sqrt(holding.market_cap) / total_sqrt_market_cap
                 )
@@ -237,10 +237,10 @@ class Portfolio:
                 holding.target = 0
 
     def calculate_owned_allocation(self):
-        non_stale_holdings = [h for h in self.holdings if not h.stale]
-        total_value = sum([h.price * h.amount for h in non_stale_holdings])
+        non_frozen_holdings = [h for h in self.holdings if not h.frozen]
+        total_value = sum([h.price * h.amount for h in non_frozen_holdings])
         for holding in self.holdings:
-            if total_value and not holding.stale:
+            if total_value and not holding.frozen:
                 holding.allocation = (100 * holding.price * holding.amount) / total_value
             else:
                 holding.allocation = 0
