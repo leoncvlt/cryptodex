@@ -42,7 +42,7 @@ class Order:
     exchange_data: dict = field(default_factory=dict)
 
     # on order initialization, set its type (buy or sell) based on the amount of units
-    # being traded (negating units means purchase order, positive means sell order)
+    # being traded (negative units means purchase order, positive means sell order)
     # and set its units (order volume) to an absolute value afterwards
     def __post_init__(self):
         self.buy_or_sell = "buy" if self.units < 0 else "sell"
