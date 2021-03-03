@@ -47,7 +47,7 @@ currency = "usd"
 # from the assets on the exchange which are available for trading with the
 # fiat currency specified above  and will be allocated based on the square 
 # root of their market cap
-assets = 16
+assets = 10
 
 # exclude the assets in the list from being allocated in the portfolio.
 # list assets by their symbol, e.g. "xbt", "eth"
@@ -101,7 +101,7 @@ When calling `buy` or `sell`, you will be presented with a list of the orders th
 By default, `buy` and `sell` run in mock mode, which tells the exchange to only validate orders without executing them. To tell the exchange to actually process the orders, pass the `--no-mock` flag (you will be asked to confirm the orders submission anyway).
 
 ## Exchanges
-The application is built in a modular way to support different exchange platforms - right now the only supported exchange is [Kraken](https://www.kraken.com/). To implement additional exchanges, extend the abstract `Exchange` class implementing all required abstract methods:
+The application is built in a modular way to support different exchange platforms - right now the only supported exchange is [Kraken](https://www.kraken.com/). To implement additional exchanges, extend the abstract `Exchange` class and implement all required abstract methods.
 
 ## Support [![Buy me a coffee](https://img.shields.io/badge/-buy%20me%20a%20coffee-lightgrey?style=flat&logo=buy-me-a-coffee&color=FF813F&logoColor=white "Buy me a coffee")](https://www.buymeacoffee.com/leoncvlt)
 If this tool has proven useful to you, consider [buying me a coffee](https://www.buymeacoffee.com/leoncvlt) to support development of this and [many other projects](https://github.com/leoncvlt?tab=repositories).

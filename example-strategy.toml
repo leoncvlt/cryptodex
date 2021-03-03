@@ -1,0 +1,29 @@
+# the fiat currency to use as base for all cryptocurrency trading
+# allowed currencies so far are ["usd", "eur", "gbp"]
+currency = "usd"
+
+[portfolio]
+# the amount of assets to hold in the portfolio. the assets will be fetched 
+# from the assets on the exchange which are available for trading with the
+# fiat currency specified above  and will be allocated based on the square 
+# root of their market cap
+assets = 10
+
+# exclude the assets in the list from being allocated in the portfolio.
+# list assets by their symbol, e.g. "xbt", "eth"
+exclude = []
+
+# number of 'frozen' assets to keep in the portfolio, on top of the ones above.
+# a 'frozen' asset is an asset which is allocated in the portfolio based on its
+# market cap, but is neiher sold or bought. They are effectively used as
+# 'buffers' to avoid having repeated buy / sell orders due to assets
+# bouncing in and out of your portfolio because of their market cap changing.
+frozen = 2
+
+[exchange]
+# name of the exchange platform to fetch assets from / send orders to,
+# plus the secret and private details for its API key.
+# supported exchanges so far are ["kraken"]
+platform = "kraken"
+key = "keykeykeykeykeykeykeykeykeykeykeykeykeykeykeykeykeykeykey"
+secret = "secretsecretsecretsecretsecretsecretsecretsecretsecretsecretsecretsecretsecretsecretsecr"
