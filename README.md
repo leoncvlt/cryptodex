@@ -2,6 +2,8 @@
 
 A python tool to automate and mantain a cryptocurrency-based portfolio tracking the market index.
 
+![jWMGIXzPpo](https://user-images.githubusercontent.com/4929974/109850563-8eca9f80-7c4a-11eb-8a78-e644c81789dd.gif)
+
 ## Disclaimer
 **I am not a qualified licensed investment advisor and I don't have any professional finance experience. This tool neither is, nor should be construed as an offer, solicitation, or recommendation to buy or sell any cryptocurencies assets. Use it at your own risk.**
 
@@ -101,7 +103,7 @@ When calling `buy` or `sell`, you will be presented with a list of the orders th
 By default, `buy` and `sell` run in mock mode, which tells the exchange to only validate orders without executing them. To tell the exchange to actually process the orders, pass the `--no-mock` flag (you will be asked to confirm the orders submission anyway).
 
 ## Exchanges
-The application is built in a modular way to support different exchange platforms - right now the only supported exchange is [Kraken](https://www.kraken.com/). To implement additional exchanges, extend the abstract `Exchange` class and implement all required abstract methods.
+The application is built in a modular way to support different exchange platforms - right now the only supported exchange is [Kraken](https://www.kraken.com/). To implement additional exchanges, extend the abstract [`Exchange` class](https://github.com/leoncvlt/cryptodex/blob/master/cryptodex/exchanges/exchange.py) and implement all required abstract methods.
 
 ## Support [![Buy me a coffee](https://img.shields.io/badge/-buy%20me%20a%20coffee-lightgrey?style=flat&logo=buy-me-a-coffee&color=FF813F&logoColor=white "Buy me a coffee")](https://www.buymeacoffee.com/leoncvlt)
 If this tool has proven useful to you, consider [buying me a coffee](https://www.buymeacoffee.com/leoncvlt) to support development of this and [many other projects](https://github.com/leoncvlt?tab=repositories).
