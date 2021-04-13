@@ -103,7 +103,8 @@ def balance(state):
 
 def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True):
     with console.status("[bold green]Calculating investments..."):
-        orders = portfolio.invest(amount=amount, rebalance=rebalance)
+        raw_orders = portfolio.invest(amount=amount, rebalance=rebalance)
+        orders = sorted(raw_orders, key=lambda order: order.buy_or_sell, reverse=True)
 
     console.print("[bold]The following orders will be sent to the exchange:")
     display_orders(orders)
