@@ -69,22 +69,14 @@ class Portfolio:
         for coin in market_data:
             # if we reached the max amount of holdings to have in the portfolio
             # and there are no more owned assets to parse, stop iterating
-            current_holdings = len(self.holdings)
+            current_holdings = len(([h for h in self.holdings if not h.stale]))
             is_over_max_holdings = current_holdings >= total_holdings
             if is_over_max_holdings and not len(parsed_owned_assets):
                 break
 
             # get the symbol of the asset as specified in the exchange
-            symbol = exchange.get_symbol(coin["symbol"])
-
-            # if the assets is in the exclusion list
-            # (using the coingecko naming convention),
-            # just skip over it, but remove it from the list of owned assets if present
-            if coin["symbol"].lower() in excluded_assets:
-                # log.info(f"{coin['symbol']} in exclusion list, skipped")
-                if symbol in parsed_owned_assets.keys():
-                    del parsed_owned_assets[symbol]
-                continue
+            coingecko_symbol = coin["symbol"].lower()
+            symbol = exchange.get_symbol(coingecko_symbol)
 
             # if the asset is available on this exchange for trading
             # with the provided currency
@@ -98,10 +90,14 @@ class Portfolio:
                     else:
                         holding.stale = True
 
-                # if we don't own the asset, add it to the portfolio only if we are
+                # if we don't own the asset and it does not appear under the list of
+                # excluded assets, add it to the portfolio only if we are
                 # under the max amount of holdings to have, and its amount stays zero
                 if not symbol in parsed_owned_assets.keys():
-                    if not is_over_max_holdings:
+                    if (
+                        not is_over_max_holdings
+                        and not coingecko_symbol in excluded_assets
+                    ):
                         self.holdings.append(holding)
                 # otherwise, we own the asset already, parse the number of units we own
                 # and remove it from the list of owned assets to parse
@@ -112,6 +108,10 @@ class Portfolio:
                     holding.amount = float(parsed_owned_assets[symbol])
                     del parsed_owned_assets[symbol]
                     self.holdings.append(holding)
+                    # if one of the owned asset is excluded in the strategy,
+                    # mark it as stale so it's sold during rebalancing
+                    if coingecko_symbol in excluded_assets:
+                        holding.stale = True
             # else:
             #     log.warning(
             #         f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.currency}"
@@ -227,7 +227,9 @@ class Portfolio:
 
     def allocate_by_sqrt_market_cap(self):
         non_frozen_holdings = [h for h in self.holdings if not h.frozen and not h.stale]
-        total_sqrt_market_cap = sum([math.sqrt(h.market_cap) for h in non_frozen_holdings])
+        total_sqrt_market_cap = sum(
+            [math.sqrt(h.market_cap) for h in non_frozen_holdings]
+        )
         for holding in self.holdings:
             if not holding.frozen and not holding.stale:
                 holding.target = (
