@@ -110,12 +110,8 @@ class Portfolio:
                     self.holdings.append(holding)
                     # if one of the owned asset is excluded in the strategy,
                     # mark it as stale so it's sold during rebalancing
-                    if coingecko_symbol in excluded_assets:
+                    if coingecko_symbol in excluded_assets or is_over_max_holdings:
                         holding.stale = True
-            # else:
-            #     log.warning(
-            #         f"Coin {coin['name']} ({coin['symbol']}) not available for purchase with {self.currency}"
-            #     )
 
         # calculate the target allocation of each asset in the portfolio
         # based on the square root of its market cap
