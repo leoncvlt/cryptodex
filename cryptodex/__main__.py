@@ -4,6 +4,7 @@ import os
 import sys
 import logging
 from pathlib import Path
+from datetime import datetime
 
 from rich.console import Console
 from rich.logging import RichHandler
@@ -12,7 +13,7 @@ from rich.traceback import install as install_rich_tracebacks
 from portfolio import Portfolio
 from exchanges.exchange import Exchange
 from exchanges.kraken import KrakenExchange
-from utils import display_portfolio_assets, display_orders
+from utils import display_portfolio_assets, write_portfolio_assets, display_orders
 
 log = logging.getLogger(__name__)
 install_rich_tracebacks()
@@ -97,8 +98,18 @@ def refresh(state):
 
 @app.command(help="Display your current portfolio balance")
 @click.pass_obj
-def balance(state):
+@click.option(
+    "--log", is_flag=True, help="Log the current portfolio balance to a .csv file",
+)
+def balance(state, log):
     display_portfolio_assets(state.portfolio.holdings, state.currency)
+    if log:
+        now = datetime.now()
+        filename = Path(".balances") / f"{now.strftime('%Y%m%d')}.csv"
+        if not filename.is_file():
+            filename.parent.mkdir(parents=True, exist_ok=True)
+        console.print(f"Writing balance to {str(filename)}")
+        write_portfolio_assets(filename, state.portfolio.holdings, state.currency)
 
 
 def invest(portfolio, exchange, currency, amount, rebalance, estimate, mock=True):

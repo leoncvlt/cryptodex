@@ -77,6 +77,9 @@ Once initialized with a strategy file, `cryptodex` will connect to the specified
 ### `balance`
 Displays your current portfolio balance, alongside with the latest target allocation.
 
+Options:
+- `--log`: Writes the current portfolio balance to a timestamped .csv file inside a `.balances` folder in the current working directory
+
 ### `buy [OPTIONS] [AMOUNT]`
 Invest a lump sum `[AMOUNT]` into the portfolio by purchasing assets units proportionally to their target allocations.
 

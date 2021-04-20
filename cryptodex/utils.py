@@ -1,3 +1,5 @@
+import csv
+
 from rich.console import Console
 from rich.table import Table
 
@@ -39,6 +41,24 @@ def display_portfolio_assets(assets, currency=None):
     total_portfolio_value = sum([h.price * h.amount for h in assets])
     table.add_row("[bold]Total", format_currency(total_portfolio_value, currency))
     console.print(table)
+
+
+def write_portfolio_assets(filename, assets, currency=None):
+    with open(filename, "w", encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter=",", lineterminator="\n")
+        writer.writerow(["Symbol", "Asset", "Price", "Amount", "Value"])
+        for holding in (holding for holding in assets if round(holding.amount, 6) > 0):
+            writer.writerow(
+                [
+                    holding.symbol.upper(),
+                    holding.name,
+                    holding.price,
+                    holding.amount,
+                    format_currency((holding.price * holding.amount), currency),
+                ]
+            )
+        total = sum([h.price * h.amount for h in assets])
+        writer.writerow(["", "", "", "", format_currency(total, currency)])
 
 
 def display_orders(orders):
