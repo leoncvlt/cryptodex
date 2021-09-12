@@ -43,6 +43,7 @@ class KrakenExchange(Exchange):
         return {
             key.lower(): value
             for key, value in self.api.query_private("Balance")["result"].items()
+            if float(value) > 0
         }
 
     def get_assets_data(self, assets, currency):
