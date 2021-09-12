@@ -208,7 +208,7 @@ class Portfolio:
         return orders
 
     def get_predicted_portfolio(self, orders):
-        estimated_holdings = deepcopy([h for h in self.holdings if not h.frozen])
+        estimated_holdings = deepcopy([h for h in self.holdings])
         for order in orders:
             for holding in estimated_holdings:
                 if holding.symbol == order.symbol:
