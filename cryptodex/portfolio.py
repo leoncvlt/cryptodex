@@ -84,7 +84,7 @@ class Portfolio:
                 holding = Holding(symbol, coin["name"], coin["market_cap"])
                 # if we reached the max amount of holdings to have in the portfolio,
                 # mark this asset as frozen (won't be bought or sold)
-                if current_holdings > self.model["assets"]:
+                if current_holdings > self.model["assets"] - 1:
                     if current_holdings <= total_holdings:
                         holding.frozen = True
                     else:
@@ -111,6 +111,7 @@ class Portfolio:
                     # if one of the owned asset is excluded in the strategy,
                     # mark it as stale so it's sold during rebalancing
                     if coingecko_symbol in excluded_assets or is_over_max_holdings:
+                        holding.frozen = False
                         holding.stale = True
 
         # calculate the target allocation of each asset in the portfolio
