@@ -19,7 +19,9 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Current %")
     table.add_column("Target %")
     table.add_column("Drift %")
-    assets = list(filter(lambda a: (round(a.price * a.amount, 2) > 0), assets))
+    assets = list(
+        filter(lambda a: (round(a.price * a.amount, 2) > 0 or a.target > 0), assets)
+    )
     for holding in assets:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
         amount = format_currency((holding.price * holding.amount), currency)
@@ -29,7 +31,6 @@ def display_portfolio_assets(assets, currency=None):
             f"{(holding.allocation - holding.target):.2f}%" if not holding.frozen else "-"
         )
         row_style = "dim" if holding.frozen else ""
-
         table.add_row(
             name,
             amount,
