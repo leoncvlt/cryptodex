@@ -111,7 +111,6 @@ class Portfolio:
                     # if one of the owned asset is excluded in the strategy,
                     # mark it as stale so it's sold during rebalancing
                     if coingecko_symbol in excluded_assets or is_over_max_holdings:
-                        holding.frozen = False
                         holding.stale = True
 
         # calculate the target allocation of each asset in the portfolio
@@ -215,7 +214,11 @@ class Portfolio:
                     sign = 1 if order.buy_or_sell == "buy" else -1
                     holding.amount += order.units * sign
         total_value = sum(
-            [holding.price * holding.amount for holding in estimated_holdings]
+            [
+                holding.price * holding.amount
+                for holding in estimated_holdings
+                if not holding.frozen
+            ]
         )
         for holding in estimated_holdings:
             holding.allocation = (100 * holding.price * holding.amount) / total_value
