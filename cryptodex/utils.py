@@ -12,6 +12,10 @@ def format_currency(value, currency):
     return f"{round(value, 2)} {CURRENCIES.get(currency, '')}"
 
 
+def is_substantial(amount):
+    return round(amount, 6) > 0
+
+
 def display_portfolio_assets(assets, currency=None):
     table = Table()
     table.add_column("Asset")
@@ -20,7 +24,7 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Target %")
     table.add_column("Drift %")
     assets = list(
-        filter(lambda a: (round(a.price * a.amount, 5) > 0 or a.target > 0), assets)
+        filter(lambda a: (is_substantial(a.price * a.amount) or a.target > 0), assets)
     )
     for holding in assets:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
@@ -56,7 +60,7 @@ def write_portfolio_assets(filename, assets, currency=None):
     with open(filename, "w", encoding="utf-8") as f:
         writer = csv.writer(f, delimiter=",", lineterminator="\n")
         writer.writerow(["Symbol", "Asset", "Price", "Amount", "Value"])
-        for holding in (holding for holding in assets if round(holding.amount, 6) > 0):
+        for holding in (holding for holding in assets if is_substantial(holding.amount)):
             writer.writerow(
                 [
                     holding.symbol.upper(),

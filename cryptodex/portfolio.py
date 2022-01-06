@@ -5,6 +5,7 @@ from copy import deepcopy
 
 from rich.console import Console
 
+from utils import is_substantial
 
 from pycoingecko import CoinGeckoAPI
 
@@ -106,7 +107,7 @@ class Portfolio:
                 # will be marked as frozen anyway and won't be bought or sold)
                 else:
                     holding.amount = float(parsed_owned_assets[symbol])
-                    if (round(holding.amount, 5) > 0):
+                    if is_substantial(holding.amount):
                         del parsed_owned_assets[symbol]
                         self.holdings.append(holding)
                         # if one of the owned asset is excluded in the strategy,
