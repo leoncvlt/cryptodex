@@ -106,12 +106,14 @@ class Portfolio:
                 # will be marked as frozen anyway and won't be bought or sold)
                 else:
                     holding.amount = float(parsed_owned_assets[symbol])
-                    del parsed_owned_assets[symbol]
-                    self.holdings.append(holding)
-                    # if one of the owned asset is excluded in the strategy,
-                    # mark it as stale so it's sold during rebalancing
-                    if coingecko_symbol in excluded_assets or is_over_max_holdings:
-                        holding.stale = True
+                    if (round(holding.amount, 5) > 0):
+                        del parsed_owned_assets[symbol]
+                        self.holdings.append(holding)
+                        # if one of the owned asset is excluded in the strategy,
+                        # mark it as stale so it's sold during rebalancing
+                        if coingecko_symbol in excluded_assets or is_over_max_holdings:
+                            holding.frozen = False
+                            holding.stale = True
 
         # calculate the target allocation of each asset in the portfolio
         # based on the square root of its market cap
@@ -160,7 +162,7 @@ class Portfolio:
                 holding_value = holding.price * holding.amount
                 target_value = (total_value / 100) * holding.target
                 rebalanced_order_value = holding_value - target_value
-                if rebalanced_order_value > 0:  # sell order
+                if rebalanced_order_value > 0:
                     # if the rebalanced order value is positive, it means we are
                     # over its target value and will result in a buy order -
                     # add the revenue from the sale to the available funds
@@ -168,14 +170,9 @@ class Portfolio:
                     funds += rebalanced_order_value
                 else:
                     # if the rebalanced order value is negative, it means we are
-                    # below its target value and will result in a sell order -
-                    # set it if enough funds to process it are available
-                    if funds - abs(rebalanced_order_value) > 0:
-                        holding.order_data["currency"] = rebalanced_order_value
-                        funds -= abs(rebalanced_order_value)
-                    else:
-                        log.warning("Not enough funds to rebalance all assets.")
-                        break
+                    # below its target value and will result in a sell order
+                    holding.order_data["currency"] = rebalanced_order_value
+                    funds -= abs(rebalanced_order_value)
 
         for holding in holdings:
             if holding.frozen:
