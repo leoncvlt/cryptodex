@@ -20,7 +20,7 @@ def display_portfolio_assets(assets, currency=None):
     table.add_column("Target %")
     table.add_column("Drift %")
     assets = list(
-        filter(lambda a: (round(a.price * a.amount, 2) > 0 or a.target > 0), assets)
+        filter(lambda a: (round(a.price * a.amount, 5) > 0 or a.target > 0), assets)
     )
     for holding in assets:
         name = f"[bold]{holding.symbol.upper()}[/bold] ({holding.name})"
@@ -30,7 +30,14 @@ def display_portfolio_assets(assets, currency=None):
         drift = (
             f"{(holding.allocation - holding.target):.2f}%" if not holding.frozen else "-"
         )
-        row_style = "dim" if holding.frozen else ""
+        row_style = ""
+        if holding.frozen:
+            row_style = "dim"
+        else:
+            if holding.amount == 0:
+                row_style = "green"
+            if holding.target == 0:
+                row_style = "red"
         table.add_row(
             name,
             amount,
